@@ -5,6 +5,7 @@ struct SonifineApp: App {
     @State private var sonos: SonosController
     @State private var catalog: SpotifyCatalog
     @State private var watcher = VolumeButtonWatcher()
+    @State private var nowPlaying: NowPlayingSession
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -15,6 +16,12 @@ struct SonifineApp: App {
             webAPI: SpotifyWebAPI(secrets: secrets),
             sonosService: SonosSpotifyService(secrets: secrets),
             household: { await sonos.household() }))
+        _nowPlaying = State(initialValue: NowPlayingSession(commands: .init(
+            play: { Task { if !sonos.selectedStatus.isPlaying, let group = sonos.selectedGroup { await sonos.togglePlayPause(group) } } },
+            pause: { Task { if sonos.selectedStatus.isPlaying, let group = sonos.selectedGroup { await sonos.togglePlayPause(group) } } },
+            next: { Task { await sonos.next() } },
+            previous: { Task { await sonos.previous() } },
+            seek: { seconds in Task { await sonos.seek(to: seconds) } })))
     }
 
     var body: some Scene {
@@ -42,10 +49,12 @@ struct SonifineApp: App {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(3))
                     await sonos.poll()
+                    nowPlaying.update(group: sonos.selectedGroup, status: sonos.selectedStatus)
                 }
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 guard phase == .active else { return }
+                nowPlaying.start()
                 watcher.start()
                 Task { await sonos.loadGroups() }
             }

@@ -30,9 +30,9 @@ device-build: ## Build a signed app for a physical iPhone
 device: device-build ## Build and install on the iPhone (unlocked, same Wi-Fi or cable)
 	xcrun devicectl device install app --device $(DEVICE) $(DERIVED)/Build/Products/Debug-iphoneos/$(SCHEME).app
 
-logs: ## Start the app on the iPhone and stream its volume-button log
+logs: ## Start the app on the iPhone and stream its volume-button and Now Playing log
 	xcrun devicectl device process launch --device $(DEVICE) --terminate-existing --console \
-		--environment-variables '{"OS_ACTIVITY_DT_MODE": "YES"}' $(BUNDLE) 2>&1 | grep --line-buffered VolumeButtons
+		--environment-variables '{"OS_ACTIVITY_DT_MODE": "YES"}' $(BUNDLE) 2>&1 | grep --line-buffered -E "VolumeButtons|NowPlaying"
 
 icon: ## Redraw the app icon
 	uv run scripts/make_icon.py

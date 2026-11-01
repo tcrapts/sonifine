@@ -15,7 +15,8 @@ the app move the iPhone volume to the middle once when it nears either end.
 
 ## Consequences
 
-- The buttons work while the app is open.
+- The buttons work while the app is open. ADR 0004 keeps them for the app in
+  the background too, and against other apps that steer the Sonos.
 - The app shows its own volume overlay with the Sonos volume.
 - Earlier versions reset the iPhone volume to 50% after every press. iOS moved
   it back to 10%, and the app and iOS fought in a loop. Moving it once, only near

@@ -25,6 +25,7 @@ project change.
 `make logs` restarts the app on the iPhone and streams the `VolumeButtons` log
 (`OS_ACTIVITY_DT_MODE` sends `os.Logger` output to the console). Each line shows
 the iPhone volume before and after, and whether the app counted it as a press.
+`NowPlaying` lines show when the silent audio starts and stops.
 
 ## Icon
 

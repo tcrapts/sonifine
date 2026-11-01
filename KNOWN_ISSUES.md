@@ -1,15 +1,5 @@
 # Known issues
 
-## P2 — Volume buttons work only while the app is open
-
-- **Description:** iOS reports volume presses to an app only while it is in the
-  foreground with an active audio session.
-- **Impact:** On the lock screen or in another app, the buttons change the
-  iPhone volume instead of the Sonos volume.
-- **Affected code:** `App/Volume/VolumeButtonWatcher.swift`.
-- **Direction:** a silent audio session in the background could keep the app
-  listening. That needs the audio background mode and more battery.
-
 ## P2 — Two Spotify connections
 
 - **Description:** the Spotify home comes through the Sonos link, the library,
@@ -19,22 +9,20 @@
 - **Direction:** Sonos's Spotify service also offers the library and search,
   so the Web API sign-in could go.
 
-## P1 — Another app turns the buttons into big Sonos steps
+## P1 — The fix for big volume steps is untested on the iPhone
 
-- **Description:** at times the iPhone volume mirrors the Sonos volume: iOS
-  sends each press straight to the Sonos, in steps of 5% of the iPhone scale,
-  and keeps the iPhone volume at the Sonos volume. The app still counts the
-  press and adds its own step on top. On 1 November 2026 the Sonos went
-  8 → 16 → 23 → 12 → 8 for four presses, while it played its own queue
-  (`x-rincon-queue`, no AirPlay and no Spotify Connect session).
-- **Impact:** one press changes the Sonos volume by 6 to 11 instead of the step
-  size. iOS also moves the iPhone volume back to the Sonos volume after the app
-  moves it to the middle.
-- **Affected code:** `App/Volume/VolumeButtonWatcher.swift`.
-- **Direction:** the likely owner is the Spotify app, which shows Sonos playback
-  as a Connect device and claims the volume buttons for it. Sonifine can claim
-  them back by becoming the Now Playing app (silent audio, Now Playing info and
-  remote commands), as Sonify does for its lock-screen controls.
+- **Description:** at times another app, most likely Spotify, held the volume
+  buttons: iOS sent each press straight to the Sonos in steps of 5%, and the app
+  added its own step on top. On 1 November 2026 four presses moved the Sonos
+  8 → 16 → 23 → 12 → 8. ADR 0004 makes Sonifine the Now Playing app to take the
+  buttons back. The simulator shows the app as Now Playing and awake in the
+  background; it has no volume buttons and no Spotify app.
+- **Impact:** until a test on the iPhone, a press may still move the Sonos by 6
+  to 11.
+- **Affected code:** `App/Volume/NowPlayingSession.swift`, `App/Volume/VolumeButtonWatcher.swift`.
+- **Direction:** with Spotify showing the Sonos as its device, press with
+  Sonifine open, then on the lock screen, while `make logs` runs and the Sonos
+  volume is logged.
 
 ## P3 — Artist Play queues few songs
 

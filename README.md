@@ -16,8 +16,11 @@ onder **System → ⚙️**.
 - **System** toont elke kamer met wat er speelt, play/pause en volume.
 - **Now Playing** heeft voortgang, shuffle, herhalen, de wachtrij, een hartje voor
   Liked Songs en "Go to album/artist".
-- De volumeknoppen werken zolang de app open is. Een balk bovenin toont het nieuwe
-  volume.
+- De volumeknoppen werken als de app open is, en ook op het vergrendelscherm en in
+  andere apps zolang de Sonos speelt of tot tien minuten na een pauze. Een balk
+  bovenin de app toont het nieuwe volume.
+- Het vergrendelscherm en het bedieningspaneel tonen wat de Sonos speelt, met
+  play/pause, volgende, vorige en spoelen.
 
 ## Projectindeling
 

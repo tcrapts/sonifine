@@ -13,6 +13,7 @@ through one `\.play` action.
 `SecretStore` (the Keychain) and `XMLNode`, the one XML reader.
 `App/Volume/VolumeButtonWatcher` turns presses into
 `SonosController.nudgeVolume`; `VolumePress` holds its rules.
+`App/Volume/NowPlayingSession` keeps the buttons and the lock screen for the app.
 `PlayRequest` decides what a tap queues; `SpotifyURI` parses every Spotify URI
 and encodes it for the Sonos queue.
 
@@ -75,6 +76,12 @@ API for the buttons. `VolumeButtonWatcher` observes
 iPhone volume to the middle once, through the slider of a hidden
 `MPVolumeView`, which also keeps the iOS volume overlay away. `VolumeOverlay`
 shows the Sonos volume instead.
+
+`NowPlayingSession` holds the buttons for the app, as
+[ADR 0004](adr/0004-claim-the-volume-buttons-as-the-now-playing-app.md)
+explains: silent audio in a non-mixable `.playback` session, the song of the
+selected group in `MPNowPlayingInfoCenter`, and the lock-screen commands. In the
+background the silence stops ten minutes after the Sonos pauses (`KeepAwake`).
 
 ## Screens
 

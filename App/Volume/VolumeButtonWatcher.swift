@@ -24,7 +24,7 @@ enum VolumePress {
 /// Turns presses of the iPhone volume buttons into +1 / -1 events.
 ///
 /// iOS has no API for the buttons, so this watches the system output volume
-/// while an ambient audio session is active. Near either end it moves the
+/// while `NowPlayingSession` keeps the audio session active. Near either end it moves the
 /// volume to the middle once, through the slider of a hidden `MPVolumeView`,
 /// which also keeps the iOS volume overlay away. If iOS moves it back, the
 /// watcher accepts that.
@@ -38,8 +38,6 @@ final class VolumeButtonWatcher {
     private var observation: NSKeyValueObservation?
 
     func start() {
-        try? session.setCategory(.ambient, options: [.mixWithOthers])
-        try? session.setActive(true)
         if observation == nil {
             observation = session.observe(\.outputVolume, options: [.old, .new]) { [weak self] _, change in
                 guard let old = change.oldValue, let new = change.newValue else { return }
