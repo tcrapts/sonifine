@@ -6,7 +6,7 @@
   foreground with an active audio session.
 - **Impact:** On the lock screen or in another app, the buttons change the
   iPhone volume instead of the Sonos volume.
-- **Affected code:** `App/VolumeButtonWatcher.swift`.
+- **Affected code:** `App/Volume/VolumeButtonWatcher.swift`.
 - **Direction:** a silent audio session in the background could keep the app
   listening. That needs the audio background mode and more battery.
 
@@ -15,7 +15,7 @@
 - **Description:** the Spotify home comes through the Sonos link, the library,
   search and Liked Songs through the Web API sign-in. The user connects twice.
 - **Impact:** one more sign-in, and one more connection that can lapse.
-- **Affected code:** `App/SpotifyHome.swift`, `App/Spotify.swift`.
+- **Affected code:** `App/Spotify/SonosSpotifyService.swift`, `App/Spotify/SpotifyWebAPI.swift`.
 - **Direction:** Sonos's Spotify service also offers the library and search,
   so the Web API sign-in could go.
 
@@ -25,19 +25,19 @@
   after the app moves it to the middle. At the bottom of the scale a press down
   then changes nothing that the app can see.
 - **Impact:** an occasional press down that does nothing.
-- **Affected code:** `App/VolumeButtonWatcher.swift`, `moveAwayFromEdge`.
+- **Affected code:** `App/Volume/VolumeButtonWatcher.swift`, `VolumePress.needsMiddle`.
 
 ## P3 — The heart needs an extra Spotify permission
 
 - **Description:** sign-ins made before the heart existed lack
   `user-library-modify`. The first tap on the heart asks to sign in again.
-- **Affected code:** `App/Spotify.swift`, `setLiked`.
+- **Affected code:** `App/Spotify/SpotifyWebAPI.swift`, `setLiked`.
 
 ## P3 — Artist Play queues few songs
 
 - **Description:** artist Play queues the artist's songs from a Web API search,
   which returns five to ten songs.
-- **Affected code:** `App/Spotify.swift`, `tracks(of:)` for `.artist`.
+- **Affected code:** `App/Spotify/SpotifyWebAPI.swift`, `songs(of:)` for `.artist`.
 
 ## P3 — Free signing expires after seven days
 
