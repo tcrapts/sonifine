@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// A titled row on the Spotify home page, such as "Good morning" or "Your top mixes".
+/// A titled row on the Spotify home page, such as "Jump back in" or "Your top mixes".
 struct HomeShelf: Identifiable {
     let id: String
     let title: String
@@ -109,12 +109,20 @@ final class SpotifyHome {
             shelves = page.views.filter { $0.id.objectId != "yourmusic_root" }.compactMap { view in
                 let items = view.items?.compactMap(\.spotifyItem) ?? []
                 guard !items.isEmpty else { return nil }
-                return HomeShelf(id: view.id.objectId, title: view.content.container?.name ?? "", items: items)
+                return HomeShelf(id: view.id.objectId, title: Self.shelfTitle(view.content.container?.name ?? ""), items: items)
             }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Spotify greets in the time of its own clock, which runs hours off the iPhone's.
+    /// The screen title greets in local time, so the greeting row is named after its contents.
+    private static func shelfTitle(_ name: String) -> String {
+        let greetings = ["good morning", "good afternoon", "good evening", "good night",
+                         "goedemorgen", "goedemiddag", "goedenavond", "goedenacht"]
+        return greetings.contains(name.lowercased()) ? "Jump back in" : name
     }
 
     // MARK: Contents
