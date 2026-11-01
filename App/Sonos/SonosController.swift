@@ -14,6 +14,8 @@ final class SonosController {
     private(set) var volumeButtonPresses = 0
     /// True while a playlist, album or songs are being put in the queue.
     private(set) var isStartingPlayback = false
+    /// A short confirmation, such as "Added to the queue", for two seconds.
+    private(set) var notice: String?
     /// True while a volume change is on its way to Sonos.
     private(set) var isSendingVolume = false
 
@@ -250,6 +252,35 @@ final class SonosController {
         await performOnSelected {
             try await $0.seek(toTrack: index + 1)
             try await $0.play()
+        }
+    }
+
+    /// Adds a song, album or playlist to the queue of the selected group:
+    /// right after the current song with `next`, else at the end.
+    func addToQueue(_ uri: SpotifyURI, next: Bool) async {
+        guard let group = selectedGroup else { return }
+        guard let item = uri.queueItem(account: account) else {
+            actionError = "Sonos can't queue this."
+            return
+        }
+        let current = statuses[group.id]?.queuePosition ?? 0
+        do {
+            let added = try await player(group).addToQueue([item], after: next && current > 0 ? current : nil)
+            actionError = nil
+            show(added == 1 ? (next ? "Plays next" : "Added to the queue")
+                 : "\(added) songs \(next ? "play next" : "added to the queue")")
+        } catch {
+            actionError = (error as? AppError)?.code == 804
+                ? "Sonos can't queue this. Is it empty?"
+                : error.localizedDescription
+        }
+    }
+
+    private func show(_ message: String) {
+        notice = message
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            if notice == message { notice = nil }
         }
     }
 

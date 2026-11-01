@@ -18,8 +18,62 @@ struct PlayAction {
     func callAsFunction(_ request: PlayRequest?) { run(request) }
 }
 
+/// Adds a song, album or playlist to the queue: next, or at the end.
+struct QueueAction {
+    let run: (SpotifyURI, _ next: Bool) -> Void
+    func callAsFunction(_ uri: SpotifyURI, next: Bool) { run(uri, next) }
+}
+
 extension EnvironmentValues {
     @Entry var play = PlayAction { _ in }
+    @Entry var addToQueue = QueueAction { _, _ in }
+}
+
+extension SpotifyItem {
+    /// Songs, albums and playlists can join the queue.
+    var queues: Bool { kind == .track || kind == .album || kind == .playlist }
+}
+
+/// The Play Next and Add to Queue buttons, for swipe actions and context menus.
+private struct QueueButtons: View {
+    let item: SpotifyItem
+
+    var body: some View {
+        QueueButtonsSingle(item: item, next: true)
+        QueueButtonsSingle(item: item, next: false)
+    }
+}
+
+extension View {
+    /// Swipe right for Play Next, left for Add to Queue; or touch and hold for both.
+    @ViewBuilder
+    func queueActions(for item: SpotifyItem) -> some View {
+        if item.queues {
+            swipeActions(edge: .leading, allowsFullSwipe: true) {
+                QueueButtonsSingle(item: item, next: true).tint(.indigo)
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                QueueButtonsSingle(item: item, next: false).tint(.orange)
+            }
+            .contextMenu { QueueButtons(item: item) }
+        } else {
+            self
+        }
+    }
+}
+
+/// One of the two queue buttons, for a swipe action.
+private struct QueueButtonsSingle: View {
+    let item: SpotifyItem
+    let next: Bool
+    @Environment(\.addToQueue) private var addToQueue
+
+    var body: some View {
+        Button { addToQueue(item.uri, next: next) } label: {
+            Label(next ? "Play Next" : "Add to Queue",
+                  systemImage: next ? "text.line.first.and.arrowtriangle.forward" : "text.line.last.and.arrowtriangle.forward")
+        }
+    }
 }
 
 extension View {
@@ -77,6 +131,7 @@ struct Card: View {
             Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(width: size)
+        .contextMenu { if item.queues { QueueButtons(item: item) } }
     }
 
     private var cover: some View {
@@ -112,11 +167,14 @@ struct ItemRow: View {
     let onPlay: () -> Void
 
     var body: some View {
-        if item.opens {
-            NavigationLink(value: item) { label }
-        } else {
-            Button(action: onPlay) { label }.tint(.primary)
+        Group {
+            if item.opens {
+                NavigationLink(value: item) { label }
+            } else {
+                Button(action: onPlay) { label }.tint(.primary)
+            }
         }
+        .queueActions(for: item)
     }
 
     private var label: some View {

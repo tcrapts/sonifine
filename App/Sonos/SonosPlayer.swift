@@ -26,6 +26,9 @@ protocol SonosPlayer {
     /// Empties the queue, fills it with `items` and makes the group play from it.
     /// Returns the number of songs added; a playlist or album counts as one.
     func replaceQueue(with items: [SonosQueueItem], groupID: String) async throws -> Int
+    /// Adds `items` to the queue: right after `current` (counted from 1) for
+    /// Play Next, or at the end. Returns the number of songs added.
+    func addToQueue(_ items: [SonosQueueItem], after current: Int?) async throws -> Int
     func queue() async throws -> [QueueEntry]
 }
 
@@ -94,7 +97,15 @@ final class SOAPSonosPlayer: SonosPlayer {
 
     func replaceQueue(with items: [SonosQueueItem], groupID: String) async throws -> Int {
         _ = try await call(.avTransport, "RemoveAllTracksFromQueue")
+        let added = try await addToQueue(items, after: nil)
+        _ = try await call(.avTransport, "SetAVTransportURI",
+                           ["InstanceID": "0", "CurrentURI": "x-rincon-queue:\(groupID)#0", "CurrentURIMetaData": ""])
+        return added
+    }
+
+    func addToQueue(_ items: [SonosQueueItem], after current: Int?) async throws -> Int {
         var added = 0
+        var position = current.map { $0 + 1 } ?? 0
         // Sonos takes at most 16 items per call.
         for start in stride(from: 0, to: items.count, by: 16) {
             let chunk = items[start..<min(start + 16, items.count)]
@@ -103,12 +114,12 @@ final class SOAPSonosPlayer: SonosPlayer {
                 "EnqueuedURIs": chunk.map(\.uri).joined(separator: " "),
                 "EnqueuedURIsMetaData": chunk.map(\.metadata).joined(separator: " "),
                 "ContainerURI": "", "ContainerMetaData": "",
-                "DesiredFirstTrackNumberEnqueued": "0", "EnqueueAsNext": "0",
+                "DesiredFirstTrackNumberEnqueued": String(position), "EnqueueAsNext": current == nil ? "0" : "1",
             ])
-            added += response.value("NumTracksAdded").flatMap(Int.init) ?? 0
+            let count = response.value("NumTracksAdded").flatMap(Int.init) ?? 0
+            added += count
+            if position > 0 { position += count }
         }
-        _ = try await call(.avTransport, "SetAVTransportURI",
-                           ["InstanceID": "0", "CurrentURI": "x-rincon-queue:\(groupID)#0", "CurrentURIMetaData": ""])
         return added
     }
 

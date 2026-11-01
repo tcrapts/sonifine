@@ -88,6 +88,18 @@ struct SonosControllerTests {
         #expect(controller.errorMessage?.hasPrefix("Sonos can't play this. Is it empty") == true)
     }
 
+    @Test func playNextGoesRightAfterTheCurrentSong() async {
+        let controller = await controller()
+        fake.status.queuePosition = 7
+        await controller.refresh()
+
+        await controller.addToQueue(song("A").uri, next: true)
+        await controller.addToQueue(song("B").uri, next: false)
+
+        #expect(fake.additions.map(\.after) == [7, nil])
+        #expect(controller.notice == "Added to the queue")
+    }
+
     @Test func theChosenRoomStaysChosenWhenItJoinsAnotherGroup() async {
         let kitchen = SonosGroup(id: "RINCON_K", name: "Kitchen", coordinator: speaker, roomIDs: ["RINCON_K"])
         let bedroom = SonosGroup(id: "RINCON_B", name: "Bedroom", coordinator: speaker, roomIDs: ["RINCON_B"])
@@ -122,6 +134,20 @@ struct SOAPSonosPlayerTests {
         #expect(added == 48)
         #expect(recorded.requests.last?.bodyText.contains("x-rincon-queue:RINCON_K#0") == true)
         #expect(recorded.requests[1].bodyText.contains("<NumberOfURIs>16</NumberOfURIs>"))
+    }
+
+    @Test func playNextAsksSonosForThePlaceAfterTheCurrentSong() async throws {
+        let recorded = RecordedTransport()
+        recorded.answer(soapAction: "AddMultipleURIsToQueue",
+                        (200, soapAnswer("AddMultipleURIsToQueue", "<NumTracksAdded>1</NumTracksAdded>")))
+        let player = SOAPSonosPlayer(address: URL(string: "http://10.0.0.2:1400")!, transport: recorded.transport)
+        let item = try #require(SpotifyURI("spotify:track:A")?.queueItem(account: .default))
+
+        _ = try await player.addToQueue([item], after: 7)
+
+        let body = recorded.requests[0].bodyText
+        #expect(body.contains("<DesiredFirstTrackNumberEnqueued>8</DesiredFirstTrackNumberEnqueued>"))
+        #expect(body.contains("<EnqueueAsNext>1</EnqueueAsNext>"))
     }
 
     @Test func aFaultCarriesTheSonosErrorCode() async {

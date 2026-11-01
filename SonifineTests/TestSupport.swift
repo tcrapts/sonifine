@@ -82,6 +82,8 @@ final class FakeSonosPlayer: SonosPlayer {
 
     private(set) var adjustments: [Int] = []
     private(set) var queuedItems: [SonosQueueItem] = []
+    /// What each `addToQueue` added, and after which song.
+    private(set) var additions: [(items: [SonosQueueItem], after: Int?)] = []
     private(set) var seeks: [Int] = []
     private(set) var playModes: [PlayMode] = []
     private(set) var plays = 0
@@ -114,6 +116,12 @@ final class FakeSonosPlayer: SonosPlayer {
         if let failure { throw failure }
         queuedItems = items
         return tracksAdded
+    }
+
+    func addToQueue(_ items: [SonosQueueItem], after current: Int?) async throws -> Int {
+        if let failure { throw failure }
+        additions.append((items, current))
+        return items.count
     }
 
     func queue() async throws -> [QueueEntry] { queueEntries }

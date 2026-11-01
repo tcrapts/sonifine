@@ -25,12 +25,15 @@ struct SonifineApp: App {
                 Tab("Search", systemImage: "magnifyingglass") { screen { SearchView() } }
                 Tab("System", systemImage: "hifispeaker.2.fill") { screen { SystemView() } }
             }
-            .tint(Color.accent)
+            // The iOS default: the mini-player rides above the tab bar, which shrinks while scrolling.
+            .tabViewBottomAccessory { MiniPlayer() }
+            .tabBarMinimizeBehavior(.onScrollDown)
             .modifier(SpotifyLinkSheet())
             .modifier(VolumeOverlay())
             .environment(sonos)
             .environment(catalog)
             .environment(\.play, PlayAction { request in Task { await play(request) } })
+            .environment(\.addToQueue, QueueAction { uri, next in Task { await sonos.addToQueue(uri, next: next) } })
             .background(HiddenVolumeView(watcher: watcher).frame(width: 1, height: 1))
             .task {
                 watcher.onPress = { sonos.nudgeVolume($0) }
@@ -63,14 +66,10 @@ struct SonifineApp: App {
         }
     }
 
-    /// A tab's navigation stack with the mini-player above the tab bar.
+    /// A tab's navigation stack.
     private func screen(_ content: () -> some View) -> some View {
         NavigationStack {
             content().spotifyDestinations()
         }
-        // Room below the last row of every screen in the stack, so the mini-player
-        // never covers it.
-        .contentMargins(.bottom, 84, for: .scrollContent)
-        .overlay(alignment: .bottom) { MiniPlayer() }
     }
 }

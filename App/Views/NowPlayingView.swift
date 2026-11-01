@@ -245,17 +245,3 @@ struct SongProgress: View {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
-
-/// A thin line that shows how far the song is, for the mini-player.
-struct SongProgressLine: View {
-    let status: GroupStatus
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            ProgressView(value: status.position(at: context.date), total: max(status.duration, 1))
-                .progressViewStyle(.linear)
-                .tint(.primary)
-                .opacity(status.duration > 0 ? 1 : 0)
-        }
-    }
-}
