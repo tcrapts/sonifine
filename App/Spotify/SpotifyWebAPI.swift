@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import OSLog
 import Security
 
 /// The library sign-in: the Spotify Web API through the owner's app on
@@ -30,6 +31,7 @@ final class SpotifyWebAPI {
 
     /// After a 429 ("too many requests") the app sends nothing until then: a minute
     /// at first, twice as long each time Spotify refuses again, up to half an hour.
+    private let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
     private var pausedUntil = Date.distantPast
     private var pause: TimeInterval = 60
 
@@ -291,6 +293,9 @@ final class SpotifyWebAPI {
         request.httpMethod = method
         request.setValue("Bearer \(try await validAccessToken())", forHTTPHeaderField: "Authorization")
         let (data, status) = try await transport(request)
+        if !(200..<300).contains(status) {
+            log.error("\(method) \(path.prefix(60)): \(status) \(String(decoding: data.prefix(200), as: UTF8.self))")
+        }
         if status == 429 {
             pausedUntil = Date.now.addingTimeInterval(pause)
             pause = min(pause * 2, 30 * 60)

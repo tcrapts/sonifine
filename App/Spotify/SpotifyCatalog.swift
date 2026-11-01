@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 
 /// Everything the screens show from Spotify, from both connections: the library
 /// sign-in (`SpotifyWebAPI`) and the link (`SonosSpotifyService`). The screens
@@ -113,11 +114,16 @@ final class SpotifyCatalog {
 
     private func loadLibrary(force: Bool) async {
         guard isSignedIn, force || Date.now.timeIntervalSince(libraryAsked) > 10 * 60 else { return }
-        libraryAsked = .now
         do {
             library = try await webAPI.library()
+            libraryAsked = .now
+            Logger(subsystem: "com.example.sonifine", category: "Spotify").info(
+                "library: \(self.library.playlists.count) playlists, \(self.library.likedSongs.count) liked, \(self.library.shows.count) podcasts")
             errorMessage = nil
         } catch {
+            // A load the view cancelled, such as when Home restarts its task once the
+            // Sonos is found, doesn't count: the next one must still go out.
+            if !HTTP.isCancellation(error) { libraryAsked = .now }
             report(error)
         }
     }
@@ -230,6 +236,7 @@ final class SpotifyCatalog {
 
     private func report(_ error: Error) {
         guard !HTTP.isCancellation(error) else { return }
+        Logger(subsystem: "com.example.sonifine", category: "Spotify").error("\(String(describing: error))")
         errorMessage = error.localizedDescription
     }
 }
