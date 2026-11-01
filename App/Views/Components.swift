@@ -406,3 +406,55 @@ struct SortMenu: View {
         .menuActionDismissBehavior(.disabled)
     }
 }
+
+/// One line of text that scrolls sideways when it doesn't fit, as titles do in
+/// Spotify: it waits, scrolls one round, and starts again.
+struct MarqueeText: View {
+    let text: String
+    var font: Font = .body
+    @State private var textWidth: CGFloat = 0
+    @State private var boxWidth: CGFloat = 0
+    @State private var start = Date.now
+    private let gap: CGFloat = 48
+    private let speed: CGFloat = 30  // points per second
+    private let pause: TimeInterval = 2.5
+
+    var body: some View {
+        let overflows = boxWidth > 0 && textWidth > boxWidth
+        Text(text).font(font).lineLimit(1).hidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .leading) {
+                TimelineView(.animation(paused: !overflows)) { context in
+                    HStack(spacing: gap) {
+                        label.onGeometryChange(for: CGFloat.self) { $0.size.width } action: { textWidth = $0 }
+                        if overflows { label }
+                    }
+                    .fixedSize()
+                    .offset(x: overflows ? -offset(at: context.date) : 0)
+                }
+            }
+            // Fade the edges while scrolling, and keep the text inside its column.
+            .mask {
+                LinearGradient(stops: overflows ? [
+                    .init(color: .clear, location: 0), .init(color: .black, location: 0.04),
+                    .init(color: .black, location: 0.92), .init(color: .clear, location: 1),
+                ] : [.init(color: .black, location: 0), .init(color: .black, location: 1)],
+                startPoint: .leading, endPoint: .trailing)
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boxWidth = $0 }
+            .onChange(of: text) { start = .now }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(text)
+    }
+
+    private var label: some View {
+        Text(text).font(font).lineLimit(1).fixedSize()
+    }
+
+    private func offset(at date: Date) -> CGFloat {
+        let round = textWidth + gap
+        let cycle = pause + round / speed
+        let elapsed = date.timeIntervalSince(start).truncatingRemainder(dividingBy: cycle)
+        return elapsed < pause ? 0 : CGFloat(elapsed - pause) * speed
+    }
+}

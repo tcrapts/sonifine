@@ -6,6 +6,7 @@ struct NowPlayingView: View {
     @Environment(SonosController.self) private var sonos
     @Environment(SpotifyCatalog.self) private var catalog
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+    @Environment(\.dismiss) private var dismiss
     @State private var isLiked: Bool?
     @State private var path: [SpotifyItem] = []
     @State private var showsQueue = false
@@ -14,7 +15,7 @@ struct NowPlayingView: View {
         let status = sonos.selectedStatus
         NavigationStack(path: $path) {
             VStack(spacing: 22) {
-                Capsule().fill(.secondary).frame(width: 40, height: 5).padding(.top, 8)
+                topRow(status)
                 Artwork(url: status.artworkURL, cornerRadius: 14)
                     .aspectRatio(1, contentMode: .fit)
                     .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
@@ -47,10 +48,37 @@ struct NowPlayingView: View {
         }
     }
 
+    /// Close on the left, the room in the middle and the ⋯ menu on the right, as in Spotify.
+    private func topRow(_ status: GroupStatus) -> some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.down").frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Close")
+            Spacer()
+            Text(sonos.selectedGroup?.name ?? "").font(.subheadline.bold()).lineLimit(1)
+            Spacer()
+            if let track = status.spotifyTrack, catalog.isSignedIn {
+                Menu {
+                    Button("Go to album", systemImage: "square.stack") { open(track, \.album) }
+                    Button("Go to artist", systemImage: "music.mic") { open(track, \.artist) }
+                } label: {
+                    Image(systemName: "ellipsis").frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("More")
+            } else {
+                Color.clear.frame(width: 44, height: 44)
+            }
+        }
+        .font(.title3)
+        .tint(.primary)
+        .padding(.top, 8)
+    }
+
     private func titleRow(_ status: GroupStatus) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(status.displayTitle).font(.title2.bold()).lineLimit(1)
+                MarqueeText(text: status.displayTitle, font: .title2.bold())
                 Text([status.artist, status.album].filter { !$0.isEmpty }.joined(separator: " • "))
                     .foregroundStyle(.secondary).lineLimit(1)
             }
@@ -63,14 +91,6 @@ struct NowPlayingView: View {
                         .background(Color.primary.opacity(0.1), in: .circle)
                 }
                 .accessibilityLabel(isLiked == true ? "Remove from Liked Songs" : "Add to Liked Songs")
-                Menu {
-                    Button("Go to album", systemImage: "square.stack") { open(track, \.album) }
-                    Button("Go to artist", systemImage: "music.mic") { open(track, \.artist) }
-                } label: {
-                    Image(systemName: "ellipsis").frame(width: 44, height: 44)
-                        .background(Color.primary.opacity(0.1), in: .circle)
-                }
-                .accessibilityLabel("More")
             }
         }
         .tint(.primary)
