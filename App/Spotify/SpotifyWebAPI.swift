@@ -137,9 +137,10 @@ final class SpotifyWebAPI {
         return library
     }
 
+    /// Every liked song, newest first.
     func likedSongs() async throws -> [SpotifyItem] {
-        let page: Page<SavedTrack> = try await get("/me/tracks?limit=50")
-        return page.items.compactMap { $0?.track.item }
+        let saved: [SavedTrack?] = try await all("/me/tracks?limit=50")
+        return saved.compactMap { $0?.song }
     }
 
     /// The playlists and albums behind the recently played songs. Spotify's own
@@ -180,17 +181,11 @@ final class SpotifyWebAPI {
         switch item.kind {
         case .playlist:
             // Newer Spotify responses call the entries `items`, older ones `tracks`.
-            var page: Page<PlaylistEntry>
+            let entries: [PlaylistEntry?]
             do {
-                page = try await get("/playlists/\(item.uri.id)/items?limit=100")
+                entries = try await all("/playlists/\(item.uri.id)/items?limit=100")
             } catch {
-                page = try await get("/playlists/\(item.uri.id)/tracks?limit=100")
-            }
-            // Spotify gives 100 songs per page; sorting needs all of them.
-            var entries = page.items
-            while let next = page.nextPath, entries.count < 2000 {
-                page = try await get(next)
-                entries += page.items
+                entries = try await all("/playlists/\(item.uri.id)/tracks?limit=100")
             }
             return entries.compactMap { $0?.song }
         case .album:
@@ -234,6 +229,17 @@ final class SpotifyWebAPI {
     }
 
     // MARK: Requests
+
+    /// Every entry of a list that Spotify splits into pages, up to `limit` entries.
+    private func all<T: Decodable>(_ path: String, limit: Int = 2000) async throws -> [T?] {
+        var page: Page<T> = try await get(path)
+        var items = page.items
+        while let next = page.nextPath, items.count < limit {
+            page = try await get(next)
+            items += page.items
+        }
+        return items
+    }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await send("GET", path))
@@ -344,12 +350,28 @@ private struct Track: Decodable {
     /// Album tracks come without their album; `albumImage` fills in the cover.
     func item(albumImage: URL?) -> SpotifyItem? {
         guard let uri = SpotifyURI(uri), uri.kind == .track else { return nil }
-        return SpotifyItem(uri: uri, name: name, subtitle: artists.map(\.name).joined(separator: ", "),
-                           imageURL: album?.images?.firstURL ?? albumImage)
+        var item = SpotifyItem(uri: uri, name: name, subtitle: artists.map(\.name).joined(separator: ", "),
+                               imageURL: album?.images?.firstURL ?? albumImage)
+        item.album = album?.name
+        return item
     }
 }
 
-private struct SavedTrack: Decodable { let track: Track }
+private struct SavedTrack: Decodable {
+    let track: Track
+    let added_at: String?
+
+    var song: SpotifyItem? { track.item?.added(added_at) }
+}
+private extension SpotifyItem {
+    /// The item with the moment Spotify gives as `added_at`, such as `2026-10-30T08:00:00Z`.
+    func added(_ timestamp: String?) -> SpotifyItem {
+        var item = self
+        item.addedAt = timestamp.flatMap { try? Date($0, strategy: .iso8601) }
+        return item
+    }
+}
+
 private struct SavedAlbum: Decodable { let album: Album }
 
 private struct PlayHistory: Decodable {
@@ -366,10 +388,8 @@ private struct PlaylistEntry: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let entry = (try? container.decodeIfPresent(Track.self, forKey: .track))
             ?? (try? container.decodeIfPresent(Track.self, forKey: .item))
-        var song = entry?.item
-        song?.addedAt = (try? container.decodeIfPresent(String.self, forKey: .added_at))
-            .flatMap { $0 }.flatMap { try? Date($0, strategy: .iso8601) }
-        self.song = song
+        let addedAt = (try? container.decodeIfPresent(String.self, forKey: .added_at)) ?? nil
+        song = entry?.item?.added(addedAt)
     }
 
     private enum CodingKeys: String, CodingKey { case track, item, added_at }

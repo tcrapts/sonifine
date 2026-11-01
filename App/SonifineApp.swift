@@ -32,9 +32,9 @@ struct SonifineApp: App {
                 Tab("Search", systemImage: "magnifyingglass") { screen { SearchView() } }
                 Tab("System", systemImage: "hifispeaker.2.fill") { screen { SystemView() } }
             }
-            // The iOS default: the mini-player rides above the tab bar, which shrinks while scrolling.
+            // The mini-player rides above the tab bar. Both stay full size while scrolling.
             .tabViewBottomAccessory { MiniPlayer() }
-            .tabBarMinimizeBehavior(.onScrollDown)
+            .tabBarMinimizeBehavior(.never)
             .modifier(SpotifyLinkSheet())
             .modifier(VolumeOverlay())
             .environment(sonos)

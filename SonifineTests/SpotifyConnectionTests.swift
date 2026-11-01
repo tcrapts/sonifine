@@ -156,7 +156,11 @@ struct SpotifyWebAPITests {
         let songs = try await api.songs(of: playlist)
 
         #expect(songs.map(\.name) == ["Yellow", "Shiver", "Clocks"])
-        #expect(PlaylistOrder.recentlyAdded.apply(to: songs).map(\.name) == ["Shiver", "Yellow", "Clocks"],
-                "newest first; a song without a date goes last")
+        let newestFirst = SongOrder.newestFirst
+        #expect(newestFirst.apply(to: songs).map(\.name) == ["Shiver", "Yellow", "Clocks"],
+                "a song without a date goes last")
+        #expect(newestFirst.choosing(.added).apply(to: songs).map(\.name) == ["Yellow", "Shiver", "Clocks"],
+                "choosing it again puts the oldest first")
+        #expect(newestFirst.choosing(.title).apply(to: songs).map(\.name) == ["Clocks", "Shiver", "Yellow"])
     }
 }

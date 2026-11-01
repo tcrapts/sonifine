@@ -9,8 +9,9 @@ onder **System → ⚙️**.
 
 - **Home** toont je Spotify-startpagina: Jump back in, Daily Mix, Release Radar,
   Your top mixes, radiozenders en meer. De ▶ op een hoes speelt meteen af.
-- **Library** toont je playlists, Liked Songs en albums. Een playlist sorteer je met
-  ↑↓ rechtsboven op **Recently added**; Play en Shuffle volgen die volgorde.
+- **Library** toont je playlists, al je Liked Songs en albums. Met ↑↓ rechtsboven
+  sorteer je Liked Songs en playlists op titel, artiest, album of **Recently added**;
+  kies dezelfde nog eens voor de andere richting. Play en Shuffle volgen die volgorde.
 - **Search** zoekt in heel Spotify naar nummers, artiesten, albums en playlists.
 - Swipe naar rechts op een nummer, album of playlist voor **Play Next**, naar links
   voor **Add to Queue**. Op een hoes: lang indrukken.

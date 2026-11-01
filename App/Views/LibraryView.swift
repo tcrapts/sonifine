@@ -52,19 +52,7 @@ struct LibraryPageView: View {
         switch page {
         case .playlists: list("Playlists", library.playlists)
         case .albums: list("Albums", library.albums)
-        case .likedSongs:
-            List {
-                Section {
-                    PlayButtons(play: { play(songs(library.likedSongs)) },
-                                shuffle: { play(songs(library.likedSongs, shuffle: true)) })
-                }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-                ForEach(library.likedSongs) { song in
-                    ItemRow(item: song) { play(.tap(song, in: library.likedSongs)) }
-                }
-            }
-            .navigationTitle("Liked Songs")
+        case .likedSongs: LikedSongsView()
         }
     }
 
@@ -73,7 +61,28 @@ struct LibraryPageView: View {
             .navigationTitle(title)
     }
 
-    private func songs(_ items: [SpotifyItem], shuffle: Bool = false) -> PlayRequest {
-        .songs(items.map(\.uri), start: 0, shuffle: shuffle)
+}
+
+/// Every liked song, sorted as the user chose; Play and Shuffle follow that order.
+private struct LikedSongsView: View {
+    @Environment(SpotifyCatalog.self) private var catalog
+    @Environment(\.play) private var play
+    @AppStorage("likedSongsOrder") private var order = SongOrder.newestFirst
+
+    var body: some View {
+        let songs = order.apply(to: catalog.library.likedSongs)
+        List {
+            Section {
+                PlayButtons(play: { play(.songs(songs.map(\.uri), start: 0, shuffle: false)) },
+                            shuffle: { play(.songs(songs.map(\.uri), start: 0, shuffle: true)) })
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            ForEach(songs) { song in
+                ItemRow(item: song) { play(.tap(song, in: songs)) }
+            }
+        }
+        .navigationTitle("Liked Songs")
+        .toolbar { SortMenu(order: $order, keys: [.title, .artist, .album, .added]) }
     }
 }

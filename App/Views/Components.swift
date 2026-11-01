@@ -191,25 +191,35 @@ struct ItemRow: View {
     }
 }
 
-/// The large Play and Shuffle buttons of a playlist, album or artist.
+/// The glass Shuffle, Play and room buttons of a playlist, album or artist.
 struct PlayButtons: View {
     let play: () -> Void
     let shuffle: () -> Void
+    @Environment(SonosController.self) private var sonos
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: play) {
-                Label("Play", systemImage: "play.fill").bold().frame(maxWidth: .infinity).padding(.vertical, 6)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.accent)
-            .foregroundStyle(.black)
+        HStack(spacing: 16) {
             Button(action: shuffle) {
-                Label("Shuffle", systemImage: "shuffle").bold().frame(maxWidth: .infinity).padding(.vertical, 6)
+                Image(systemName: "shuffle").foregroundStyle(Color.accent).frame(width: 44, height: 44)
             }
-            .buttonStyle(.bordered)
-            .tint(.primary)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Shuffle")
+            Button(action: play) {
+                Label("Play", systemImage: "play.fill").bold().foregroundStyle(Color.accent)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            RoomPicker {
+                Image(systemName: "hifispeaker.fill").frame(width: 44, height: 44)
+            }
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Play on")
+            .accessibilityValue(sonos.selectedGroup?.name ?? "")
         }
+        .font(.title3)
+        .buttonStyle(.glass)
+        // Room for the glass shadow, which the list row would clip.
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
     }
 }
 
@@ -342,4 +352,32 @@ private struct SafariView: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
+/// Spotify's sort choice for a list of songs: choose a key, and choose it again
+/// to turn the direction. The arrow shows the direction of the chosen key.
+struct SortMenu: View {
+    @Binding var order: SongOrder
+    let keys: [SongOrder.Key]
+
+    var body: some View {
+        Menu {
+            Section("Sort by") {
+                ForEach(keys, id: \.self) { key in
+                    Button {
+                        order = order.choosing(key)
+                    } label: {
+                        if key == order.key, key != .custom {
+                            Label(key.label, systemImage: order.ascending ? "arrow.up" : "arrow.down")
+                        } else {
+                            Text(key.label)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .menuActionDismissBehavior(.disabled)
+    }
 }

@@ -1,32 +1,17 @@
 import SwiftUI
 
-/// The order of a playlist's songs. The choice holds for every playlist.
-enum PlaylistOrder: String {
-    case playlist, recentlyAdded
-
-    /// The songs in this order. Songs without a date keep their place at the end.
-    func apply(to songs: [SpotifyItem]) -> [SpotifyItem] {
-        guard self == .recentlyAdded else { return songs }
-        return songs.enumerated().sorted { a, b in
-            let (dateA, dateB) = (a.element.addedAt ?? .distantPast, b.element.addedAt ?? .distantPast)
-            return dateA != dateB ? dateA > dateB : a.offset < b.offset
-        }.map(\.element)
-    }
-}
-
 /// A playlist, album or artist: its cover, Play and Shuffle, and its songs.
 struct DetailView: View {
     let item: SpotifyItem
     @Environment(SpotifyCatalog.self) private var catalog
     @Environment(\.play) private var play
-    @AppStorage("playlistOrder") private var order = PlaylistOrder.playlist
+    @AppStorage("playlistSongOrder") private var order = SongOrder.custom
     @State private var loadedSongs: [SpotifyItem] = []
     @State private var albums: [SpotifyItem] = []
     @State private var errorMessage: String?
 
-    /// Only playlists from the library sign-in know when each song was added.
-    private var canSort: Bool { item.kind == .playlist && loadedSongs.contains { $0.addedAt != nil } }
-    private var isSorted: Bool { canSort && order != .playlist }
+    private var canSort: Bool { item.kind == .playlist && !loadedSongs.isEmpty }
+    private var isSorted: Bool { canSort && order.key != .custom }
     private var songs: [SpotifyItem] { canSort ? order.apply(to: loadedSongs) : loadedSongs }
 
     var body: some View {
@@ -67,16 +52,7 @@ struct DetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if canSort {
-                Menu {
-                    Picker("Sort", selection: $order) {
-                        Text("Playlist order").tag(PlaylistOrder.playlist)
-                        Text("Recently added").tag(PlaylistOrder.recentlyAdded)
-                    }
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
-                }
-            }
+            if canSort { SortMenu(order: $order, keys: SongOrder.Key.allCases) }
         }
         .task {
             do {
