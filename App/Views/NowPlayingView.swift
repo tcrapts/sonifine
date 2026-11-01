@@ -318,22 +318,19 @@ private struct CoverStrip: View {
     }
 
     private func swipe(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 15)
+        DragGesture(minimumDistance: 10)
             .updating($drag) { value, drag, _ in
-                // Up and down belong to the sheet, which closes that way.
-                guard !isSkipping, abs(value.translation.width) > abs(value.translation.height) else { return }
+                guard !isSkipping, Self.isSideways(value.translation) else { return }
                 drag = value.translation.width
             }
             .onEnded { value in
-                guard !isSkipping, abs(value.translation.width) > abs(value.translation.height) else { return }
+                guard !isSkipping else { return }
                 // The drag goes back to 0 now; `rest` keeps the strip where the finger left it.
-                rest = value.translation.width
-                let predicted = value.predictedEndTranslation.width
-                guard abs(predicted) > width / 3 else {
+                rest = Self.isSideways(value.translation) ? value.translation.width : 0
+                guard let forward = Self.skipsForward(value, width: width) else {
                     withAnimation(.spring(duration: 0.3)) { rest = 0 }
                     return
                 }
-                let forward = predicted < 0
                 isSkipping = true
                 // Skip once the neighbour is in the middle, so the new song's cover can't
                 // arrive halfway through the animation.
@@ -343,6 +340,21 @@ private struct CoverStrip: View {
                     Task { await finishSkip(forward: forward) }
                 }
             }
+    }
+
+    /// More sideways than up or down; a slanted swipe counts. Straight down closes the sheet.
+    private static func isSideways(_ translation: CGSize) -> Bool {
+        abs(translation.width) > abs(translation.height) * 0.7
+    }
+
+    /// Whether a drag skips, and which way: a fifth of the cover, or a flick that would
+    /// carry it a third of the way. Nil springs back.
+    private static func skipsForward(_ drag: DragGesture.Value, width: CGFloat) -> Bool? {
+        guard isSideways(drag.translation) else { return nil }
+        let moved = drag.translation.width, flung = drag.predictedEndTranslation.width
+        if abs(moved) > width / 5 { return moved < 0 }
+        if abs(flung) > width / 3, (flung < 0) == (moved < 0) { return flung < 0 }
+        return nil
     }
 
     private func finishSkip(forward: Bool) async {
