@@ -1,7 +1,11 @@
 # Testing
 
-The app has no automated tests yet. A change is verified by using it, and every
-Sonos action by asking the speaker what it did.
+`make test` runs the unit tests in `SonifineTests/` (Swift Testing) in the
+simulator, without network: recorded Sonos and Spotify answers go through a
+`RecordedTransport`, and `FakeSonosPlayer` stands in for a speaker. Test
+behaviour through the module interfaces; add a recorded answer for each new
+format. Beyond that, a change is verified by using it, and every Sonos action
+by asking the speaker what it did.
 
 ## Verify a change
 

@@ -1,15 +1,20 @@
 # Architecture
 
-Sonifine is a SwiftUI app without third-party packages. Three observable
-controllers hold the state; the views read them from the environment.
+Sonifine is a SwiftUI app without third-party packages. Two observable modules
+hold the state; the views read them from the environment and start music
+through one `\.play` action.
 
-| Controller | File | Talks to |
+| Module | Folder | Behind its seam |
 | --- | --- | --- |
-| `SonosController` | `App/SonosController.swift` | the Sonos players on the LAN (UPnP) |
-| `SpotifyHome` | `App/SpotifyHome.swift` | Sonos's Spotify service (the **link**) |
-| `SpotifyController` | `App/Spotify.swift` | the Spotify Web API (the **library sign-in**) |
+| `SonosController` | `App/Sonos/` | `SonosPlayer`: `SOAPSonosPlayer` talks UPnP to a player |
+| `SpotifyCatalog` | `App/Spotify/` | `SpotifyWebAPI` (library sign-in), `SonosSpotifyService` (link) |
 
-`VolumeButtonWatcher` turns presses into calls to `SonosController.nudgeVolume`.
+`App/Support/` holds the seams every adapter shares: `HTTPTransport`,
+`SecretStore` (the Keychain) and `XMLNode`, the one XML reader.
+`App/Volume/VolumeButtonWatcher` turns presses into
+`SonosController.nudgeVolume`; `VolumePress` holds its rules.
+`PlayRequest` decides what a tap queues; `SpotifyURI` parses every Spotify URI
+and encodes it for the Sonos queue.
 
 ## Sonos
 

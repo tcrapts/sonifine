@@ -3,21 +3,37 @@ import MediaPlayer
 import OSLog
 import SwiftUI
 
+/// The rules of ADR 0003 for reading a press from the iPhone output volume.
+enum VolumePress {
+    /// +1 or -1 for a change of one step of 1/16, nil for anything else: the app
+    /// moving the volume to the middle, iOS changing it, or a route change.
+    static func direction(from old: Float, to new: Float) -> Int? {
+        let step = abs(new - old)
+        guard step > 0.03, step < 0.1 else { return nil }
+        return new > old ? 1 : -1
+    }
+
+    /// Near the top or bottom a press can't move the volume further.
+    static func needsMiddle(_ volume: Float) -> Bool {
+        volume < 0.15 || volume > 0.85
+    }
+
+    static let middle: Float = 0.5
+}
+
 /// Turns presses of the iPhone volume buttons into +1 / -1 events.
 ///
-/// iOS has no API for the buttons themselves, so this watches the system output
-/// volume: each press moves it one step of 1/16 up or down. When the volume
-/// nears the top or bottom, where a press would no longer change it, the app
-/// moves it back to the middle once. If iOS moves it away again, the app accepts
-/// that instead of fighting it. The hidden `MPVolumeView` in the view hierarchy
-/// allows that move and keeps the system volume overlay away.
+/// iOS has no API for the buttons, so this watches the system output volume
+/// while an ambient audio session is active. Near either end it moves the
+/// volume to the middle once, through the slider of a hidden `MPVolumeView`,
+/// which also keeps the iOS volume overlay away. If iOS moves it back, the
+/// watcher accepts that.
 @MainActor
 final class VolumeButtonWatcher {
-    var onPress: ((Int) -> Void)?
+    var onPress: (Int) -> Void = { _ in }
 
     let volumeView = MPVolumeView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
     private let session = AVAudioSession.sharedInstance()
-    private let middle: Float = 0.5
     private let log = Logger(subsystem: "com.example.sonifine", category: "VolumeButtons")
     private var observation: NSKeyValueObservation?
 
@@ -30,29 +46,23 @@ final class VolumeButtonWatcher {
                 Task { @MainActor in self?.volumeChanged(from: old, to: new) }
             }
         }
-        moveAwayFromEdge(session.outputVolume)
+        moveToMiddleIfNeeded(session.outputVolume)
     }
 
     private func volumeChanged(from old: Float, to new: Float) {
-        let step = abs(new - old)
-        // One press is one step of 1/16. Bigger jumps come from the app moving the
-        // volume to the middle, or from iOS itself.
-        guard step > 0.03, step < 0.1 else {
+        guard let direction = VolumePress.direction(from: old, to: new) else {
             log.info("volume \(old) → \(new): not a press")
             return
         }
-        let direction = new > old ? 1 : -1
         log.info("volume \(old) → \(new): press \(direction)")
-        onPress?(direction)
-        moveAwayFromEdge(new)
+        onPress(direction)
+        moveToMiddleIfNeeded(new)
     }
 
-    /// Near the top or bottom a press can't move the volume further, so move it
-    /// to the middle. This happens once; there is no retry.
-    private func moveAwayFromEdge(_ volume: Float) {
-        guard volume < 0.15 || volume > 0.85 else { return }
+    private func moveToMiddleIfNeeded(_ volume: Float) {
+        guard VolumePress.needsMiddle(volume) else { return }
         DispatchQueue.main.async { [self] in
-            volumeView.subviews.compactMap { $0 as? UISlider }.first?.value = middle
+            volumeView.subviews.compactMap { $0 as? UISlider }.first?.value = VolumePress.middle
         }
     }
 }

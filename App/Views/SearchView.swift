@@ -7,14 +7,13 @@ struct SearchView: View {
         var id: Self { self }
     }
 
-    @Environment(SonosController.self) private var sonos
-    @Environment(SpotifyController.self) private var spotify
+    @Environment(SpotifyCatalog.self) private var catalog
+    @Environment(\.play) private var play
     @State private var query = ""
     @State private var filter = Filter.all
 
     var body: some View {
-        let results = spotify.searchResults
-        let player = Player(sonos: sonos, spotify: spotify)
+        let results = catalog.searchResults
         List {
             if !query.isEmpty {
                 Picker("Show", selection: $filter) {
@@ -26,21 +25,23 @@ struct SearchView: View {
             }
             switch filter {
             case .all:
-                rows("Songs", results.tracks.prefix(4), player: player, list: results.tracks)
+                rows("Songs", Array(results.tracks.prefix(4)), playing: results.tracks)
                 shelf("Artists", results.artists)
                 shelf("Albums", results.albums)
                 shelf("Playlists", results.playlists)
-            case .songs: rows("Songs", results.tracks[...], player: player, list: results.tracks)
-            case .artists: rows("Artists", results.artists[...], player: player, list: [])
-            case .albums: rows("Albums", results.albums[...], player: player, list: [])
-            case .playlists: rows("Playlists", results.playlists[...], player: player, list: [])
+            case .songs: rows("Songs", results.tracks, playing: results.tracks)
+            case .artists: rows("Artists", results.artists)
+            case .albums: rows("Albums", results.albums)
+            case .playlists: rows("Playlists", results.playlists)
             }
-            if let message = spotify.errorMessage {
+            if let message = catalog.errorMessage {
                 Text(message).font(.footnote).foregroundStyle(.red)
             }
         }
         .overlay {
-            if query.isEmpty {
+            if !catalog.isSignedIn {
+                ScrollView { SpotifySignIn().padding() }
+            } else if query.isEmpty {
                 ContentUnavailableView("Search Spotify", systemImage: "magnifyingglass",
                                        description: Text("Songs, artists, albums and playlists"))
             }
@@ -51,16 +52,16 @@ struct SearchView: View {
         .task(id: query) {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            await spotify.search(query)
+            await catalog.search(query)
         }
     }
 
+    /// Songs play with the other songs found; the rest opens.
     @ViewBuilder
-    private func rows(_ title: String, _ items: ArraySlice<SpotifyItem>, player: Player,
-                      list: [SpotifyItem]) -> some View {
+    private func rows(_ title: String, _ items: [SpotifyItem], playing list: [SpotifyItem] = []) -> some View {
         if !items.isEmpty {
             Section(title) {
-                ForEach(items) { item in ItemRow(item: item) { player.play(item, in: list) } }
+                ForEach(items) { item in ItemRow(item: item) { play(.tap(item, in: list)) } }
             }
         }
     }

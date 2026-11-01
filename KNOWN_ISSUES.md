@@ -27,14 +27,6 @@
 - **Impact:** an occasional press down that does nothing.
 - **Affected code:** `App/VolumeButtonWatcher.swift`, `moveAwayFromEdge`.
 
-## P3 — Renewing the key of the Sonos link is untested
-
-- **Description:** an expired key is renewed from the
-  `Client.TokenRefreshRequired` fault. That path has not run against the real
-  service yet.
-- **Impact:** if it fails, the app asks to connect Spotify again.
-- **Affected code:** `App/SpotifyHome.swift`, `renewToken`.
-
 ## P3 — The heart needs an extra Spotify permission
 
 - **Description:** sign-ins made before the heart existed lack

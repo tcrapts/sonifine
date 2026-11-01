@@ -5,10 +5,12 @@ PROJECT  := Sonifine.xcodeproj
 SCHEME   := Sonifine
 BUNDLE   := com.example.sonifine
 DERIVED  := build
+# The simulator for the tests.
+SIMULATOR ?= iPhone 17 Pro
 # the owner's iPhone 15 Pro. Override with `make device DEVICE=<udid>`; `xcrun devicectl list devices` lists them.
 DEVICE   ?= 00000000-0000000000000000
 
-.PHONY: help build device-build device logs icon clean
+.PHONY: help build test device-build device logs icon clean
 
 help: ## Show the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -16,6 +18,10 @@ help: ## Show the targets
 build: ## Build for the iOS Simulator
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'generic/platform=iOS Simulator' \
 		-derivedDataPath $(DERIVED) build -quiet
+
+test: ## Run the unit tests in the simulator
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIMULATOR)' \
+		-derivedDataPath $(DERIVED) test -quiet
 
 device-build: ## Build a signed app for a physical iPhone
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'generic/platform=iOS' \
