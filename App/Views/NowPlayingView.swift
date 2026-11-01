@@ -20,6 +20,7 @@ struct NowPlayingView: View {
                 CoverStrip(previous: neighbours.previous, current: status.artworkURL, next: neighbours.next) { forward in
                     if forward { await sonos.next() } else { await sonos.previous() }
                 }
+                .padding(.horizontal, -24)  // a page is the screen wide; the cover keeps its margin
                 titleRow(status)
                 if status.duration > 0 {
                     SongProgress(status: status) { position in Task { await sonos.seek(to: position) } }
@@ -270,44 +271,46 @@ struct SongProgress: View {
     }
 }
 
-/// The cover with the previous and next covers beside it, as in Spotify. Drag it
-/// sideways to see a neighbour; swipe far enough and that song plays.
+/// The cover with the previous and next covers beside it, as in Spotify: a paging
+/// scroll view, so the swipe feels like any iOS swipe. Landing on a neighbour plays it.
 private struct CoverStrip: View {
     let previous: URL?
     let current: URL?
     let next: URL?
     /// Skips forward (true) or back, and returns once Sonos plays the new song.
     let skip: (Bool) async -> Void
-    /// The finger's drag. iOS sets it back to 0 itself when it cancels the drag.
-    @GestureState private var drag: CGFloat = 0
-    /// Where the strip rests between drags: 0, or one cover aside during a skip.
-    @State private var rest: CGFloat = 0
-    @State private var isSkipping = false
-    /// Wide enough that the neighbours stay off screen, shadow and all, until a drag.
-    private let spacing: CGFloat = 48
 
-    /// The neighbours show only while the strip moves.
-    private var isMoving: Bool { drag != 0 || rest != 0 || isSkipping }
+    private enum Page: Hashable { case previous, current, next }
+    @State private var page: Page? = .current
+    @State private var isSkipping = false
 
     var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            HStack(spacing: spacing) {
-                cover(previous).opacity(isMoving ? 1 : 0)
-                cover(current).shadow(color: .black.opacity(0.4), radius: 24, y: 12)
-                cover(next).opacity(isMoving ? 1 : 0)
+        ScrollView(.horizontal) {
+            HStack(spacing: 0) {
+                cover(previous).id(Page.previous)
+                cover(current).id(Page.current)
+                cover(next).id(Page.next)
             }
-            .frame(width: width * 3 + spacing * 2, height: width)
-            .offset(x: -(width + spacing) + drag + rest)
-            .gesture(swipe(width: width))
+            .scrollTargetLayout()
         }
-        .aspectRatio(1, contentMode: .fit)
-        // The song changed: the strip, moved one cover aside, now shows that song in
-        // the middle without moving. Set it back without animation.
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $page, anchor: .center)
+        .defaultScrollAnchor(.center)
+        .scrollIndicators(.hidden)
+        // Room for the shadow; the pages are a screen wide, so the neighbours stay off screen.
+        .scrollClipDisabled()
+        .disabled(isSkipping)
+        .onChange(of: page) { _, landed in
+            guard let landed, landed != .current, !isSkipping else { return }
+            isSkipping = true
+            Task { await finishSkip(forward: landed == .next) }
+        }
+        // The song changed: the neighbour it showed is the new middle cover. Move back to
+        // the middle page without animation; the picture stays the same.
         .onChange(of: current) {
             var transaction = Transaction()
             transaction.disablesAnimations = true
-            withTransaction(transaction) { rest = 0 }
+            withTransaction(transaction) { page = .current }
             isSkipping = false
         }
     }
@@ -315,46 +318,9 @@ private struct CoverStrip: View {
     private func cover(_ url: URL?) -> some View {
         Artwork(url: url, cornerRadius: 14)
             .aspectRatio(1, contentMode: .fit)
-    }
-
-    private func swipe(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .updating($drag) { value, drag, _ in
-                guard !isSkipping, Self.isSideways(value.translation) else { return }
-                drag = value.translation.width
-            }
-            .onEnded { value in
-                guard !isSkipping else { return }
-                // The drag goes back to 0 now; `rest` keeps the strip where the finger left it.
-                rest = Self.isSideways(value.translation) ? value.translation.width : 0
-                guard let forward = Self.skipsForward(value, width: width) else {
-                    withAnimation(.spring(duration: 0.3)) { rest = 0 }
-                    return
-                }
-                isSkipping = true
-                // Skip once the neighbour is in the middle, so the new song's cover can't
-                // arrive halfway through the animation.
-                withAnimation(.spring(duration: 0.3)) {
-                    rest = forward ? -(width + spacing) : width + spacing
-                } completion: {
-                    Task { await finishSkip(forward: forward) }
-                }
-            }
-    }
-
-    /// More sideways than up or down; a slanted swipe counts. Straight down closes the sheet.
-    private static func isSideways(_ translation: CGSize) -> Bool {
-        abs(translation.width) > abs(translation.height) * 0.7
-    }
-
-    /// Whether a drag skips, and which way: a fifth of the cover, or a flick that would
-    /// carry it a third of the way. Nil springs back.
-    private static func skipsForward(_ drag: DragGesture.Value, width: CGFloat) -> Bool? {
-        guard isSideways(drag.translation) else { return nil }
-        let moved = drag.translation.width, flung = drag.predictedEndTranslation.width
-        if abs(moved) > width / 5 { return moved < 0 }
-        if abs(flung) > width / 3, (flung < 0) == (moved < 0) { return flung < 0 }
-        return nil
+            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+            .padding(.horizontal, 24)
+            .containerRelativeFrame(.horizontal)
     }
 
     private func finishSkip(forward: Bool) async {
@@ -363,7 +329,7 @@ private struct CoverStrip: View {
         // or the same album cover), go back to the middle.
         try? await Task.sleep(for: .seconds(1))
         guard isSkipping else { return }
-        withAnimation(.spring(duration: 0.3)) { rest = 0 }
+        withAnimation { page = .current }
         isSkipping = false
     }
 }
