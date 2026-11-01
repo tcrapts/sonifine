@@ -3,7 +3,7 @@ import Foundation
 /// A Spotify URI such as `spotify:album:6ZG5lRT77aJ3btmArcykra`, parsed once.
 /// Every form the app meets converts through it: the Web API's URIs, the Sonos
 /// track URIs and the Sonos queue encoding.
-struct SpotifyURI: Hashable, CustomStringConvertible {
+struct SpotifyURI: Hashable, CustomStringConvertible, Codable {
     enum Kind: String {
         case playlist, album, track, artist
         /// A podcast, and one of its episodes.
@@ -95,4 +95,20 @@ struct SpotifyAccount: Equatable {
 
     /// Sonos names a music service by its type: service ID × 256 + 7.
     var serviceType: Int { (Int(serviceID) ?? 9) * 256 + 7 }
+}
+
+extension SpotifyURI {
+    /// Stored as its text, such as `spotify:track:6rqhFgbbKwnb9MLmUQDhG6`.
+    init(from decoder: Decoder) throws {
+        let text = try decoder.singleValueContainer().decode(String.self)
+        guard let uri = SpotifyURI(text) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Not a Spotify URI: \(text)"))
+        }
+        self = uri
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(description)
+    }
 }

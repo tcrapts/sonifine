@@ -35,6 +35,9 @@ final class SpotifyCatalog {
         self.household = household
         isSignedIn = webAPI.isSignedIn
         isLinked = sonosService.isLinked
+        if isSignedIn, let saved = Self.savedLibrary() {
+            (library, libraryAsked) = saved
+        }
         webAPI.onSignedOut = { [weak self] in self?.signedOut() }
     }
 
@@ -60,6 +63,7 @@ final class SpotifyCatalog {
     private func signedOut() {
         isSignedIn = false
         library = SpotifyWebAPI.Library()
+        try? FileManager.default.removeItem(at: Self.libraryFile)
         searchResults = SpotifySearchResults()
     }
 
@@ -103,9 +107,12 @@ final class SpotifyCatalog {
 
     /// When the library was last asked for, loaded or not.
     private var libraryAsked = Date.distantPast
+    /// The last library Spotify gave, kept on the iPhone, so the app shows it at once
+    /// and asks Spotify less: Spotify gives a development app a small quota.
+    private static let libraryFile = URL.applicationSupportDirectory.appending(path: "spotify-library.json")
 
     /// Reloads the library and the Spotify home: always when the user asks
-    /// (`force`), else at most every ten minutes, so failed loads don't repeat.
+    /// (`force`), else at most every six hours.
     func reload(force: Bool = true) async {
         async let library: Void = loadLibrary(force: force)
         async let home: Void = loadHome()
@@ -113,10 +120,11 @@ final class SpotifyCatalog {
     }
 
     private func loadLibrary(force: Bool) async {
-        guard isSignedIn, force || Date.now.timeIntervalSince(libraryAsked) > 10 * 60 else { return }
+        guard isSignedIn, force || Date.now.timeIntervalSince(libraryAsked) > 6 * 60 * 60 else { return }
         do {
             library = try await webAPI.library()
             libraryAsked = .now
+            Self.save(library)
             Logger(subsystem: "com.example.sonifine", category: "Spotify").info(
                 "library: \(self.library.playlists.count) playlists, \(self.library.likedSongs.count) liked, \(self.library.shows.count) podcasts")
             errorMessage = nil
@@ -232,6 +240,19 @@ final class SpotifyCatalog {
             report(error)
             return false
         }
+    }
+
+    private static func savedLibrary() -> (SpotifyWebAPI.Library, Date)? {
+        guard let data = try? Data(contentsOf: libraryFile),
+              let library = try? JSONDecoder().decode(SpotifyWebAPI.Library.self, from: data),
+              let saved = try? libraryFile.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        else { return nil }
+        return (library, saved)
+    }
+
+    private static func save(_ library: SpotifyWebAPI.Library) {
+        try? FileManager.default.createDirectory(at: libraryFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? JSONEncoder().encode(library).write(to: libraryFile, options: .atomic)
     }
 
     private func report(_ error: Error) {

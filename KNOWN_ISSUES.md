@@ -1,5 +1,18 @@
 # Known issues
 
+## P1 — Spotify's quota for development apps runs out
+
+- **Description:** since July 2026 Spotify gives development-mode apps one quota per
+  developer account, and answers 429 with `QUOTA_EXCEEDED` when it is used up. It
+  doesn't say how large it is or when it resets. On 1 November 2026 a day of
+  simulator and subagent tests used it up, and the library stayed empty.
+- **Impact:** the library, search, podcasts and the heart stop working until the
+  quota resets. Sonos playback keeps working.
+- **Affected code:** `App/Spotify/SpotifyWebAPI.swift`, `App/Spotify/SpotifyCatalog.swift`.
+- **Direction:** the app keeps the last library on the iPhone, reloads it at most
+  every six hours and waits an hour after `QUOTA_EXCEEDED`. Moving the library and
+  search to Sonos's Spotify service (next issue) would leave the quota alone.
+
 ## P2 — Two Spotify connections
 
 - **Description:** the Spotify home comes through the Sonos link, the library,

@@ -124,7 +124,7 @@ final class SpotifyWebAPI {
 
     // MARK: Library
 
-    struct Library {
+    struct Library: Codable {
         var playlists: [SpotifyItem] = []
         var likedSongs: [SpotifyItem] = []
         var albums: [SpotifyItem] = []
@@ -297,7 +297,10 @@ final class SpotifyWebAPI {
             log.error("\(method) \(path.prefix(60)): \(status) \(String(decoding: data.prefix(200), as: UTF8.self))")
         }
         if status == 429 {
-            pausedUntil = Date.now.addingTimeInterval(pause)
+            // QUOTA_EXCEEDED is the budget of the developer account, which lasts much longer
+            // than a short rate limit; Spotify doesn't say how long, so wait an hour.
+            let quota = String(decoding: data, as: UTF8.self).contains("QUOTA_EXCEEDED")
+            pausedUntil = Date.now.addingTimeInterval(quota ? 60 * 60 : pause)
             pause = min(pause * 2, 30 * 60)
             throw Self.slowDown(until: pausedUntil)
         }

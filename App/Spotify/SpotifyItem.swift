@@ -1,7 +1,7 @@
 import Foundation
 
 /// Something from Spotify: a playlist, album, song, artist, podcast or episode.
-struct SpotifyItem: Identifiable, Hashable {
+struct SpotifyItem: Identifiable, Hashable, Codable {
     let uri: SpotifyURI
     let name: String
     let subtitle: String
@@ -20,7 +20,7 @@ struct SpotifyItem: Identifiable, Hashable {
     var opens: Bool { kind == .playlist || kind == .album || kind == .artist || kind == .show }
 
     /// A podcast episode, as the Web API describes it.
-    struct Episode: Hashable {
+    struct Episode: Hashable, Codable {
         var released: Date?
         var duration: TimeInterval
         /// Where the user stopped listening, in seconds. Spotify only tells with the
