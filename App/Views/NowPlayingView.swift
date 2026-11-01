@@ -22,7 +22,8 @@ struct NowPlayingView: View {
                 }
                 .padding(.horizontal, -24)  // a page is the screen wide; the cover keeps its margin
                 titleRow(status)
-                if status.duration > 0 {
+                // A station has no progress, even when Sonos Radio gives a song its length.
+                if status.duration > 0 && !status.playsRadio {
                     SongProgress(status: status) { position in Task { await sonos.seek(to: position) } }
                 }
                 transportRow(status)
@@ -40,7 +41,10 @@ struct NowPlayingView: View {
             .background { BlurredArtwork(url: status.artworkURL) }
             .toolbar(.hidden, for: .navigationBar)
             .spotifyDestinations()
-            .sheet(isPresented: $showsQueue) { QueueView() }
+            .sheet(isPresented: $showsQueue) {
+                // At a partial height iOS draws the sheet in Liquid Glass.
+                QueueView().presentationDetents([.medium, .large])
+            }
         }
         .modifier(VolumeOverlay())
         .task(id: "\(status.queuePosition) \(status.spotifyTrack?.description ?? "") \(status.playMode.shuffle)") {
@@ -84,7 +88,7 @@ struct NowPlayingView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 MarqueeText(text: status.displayTitle, font: .title2.bold())
-                Text([status.artist, status.album].filter { !$0.isEmpty }.joined(separator: " • "))
+                Text(status.details.joined(separator: " • "))
                     .foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
@@ -110,6 +114,7 @@ struct NowPlayingView: View {
                 Image(systemName: "shuffle").foregroundStyle(mode.shuffle ? Color.accent : .primary)
             }
             .accessibilityLabel(mode.shuffle ? "Shuffle on" : "Shuffle off")
+            .disabled(status.playsRadio)
             Spacer()
             Button { Task { await sonos.previous() } } label: { Image(systemName: "backward.fill").font(.title) }
                 .accessibilityLabel("Previous")
@@ -134,6 +139,7 @@ struct NowPlayingView: View {
                     .foregroundStyle(mode.repeatMode == .off ? .primary : Color.accent)
             }
             .accessibilityLabel(mode.repeatMode == .off ? "Repeat off" : mode.repeatMode == .all ? "Repeat all" : "Repeat one")
+            .disabled(status.playsRadio)
         }
         .font(.title2)
         .tint(.primary)
@@ -194,7 +200,7 @@ private struct BlurredArtwork: View {
     }
 }
 
-/// The songs in the queue. Tap one to play it.
+/// The songs in the queue, on glass. Tap one to play it; swipe one away to remove it.
 struct QueueView: View {
     @Environment(SonosController.self) private var sonos
     @Environment(\.dismiss) private var dismiss
@@ -203,35 +209,50 @@ struct QueueView: View {
     var body: some View {
         let current = sonos.selectedStatus.queuePosition - 1
         NavigationStack {
-            ScrollViewReader { proxy in
-                List(entries) { entry in
-                    Button { Task { await sonos.playFromQueue(entry.id) } } label: {
-                        HStack(spacing: 12) {
-                            Artwork(url: entry.artworkURL).frame(width: 44, height: 44)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.title).lineLimit(1)
-                                    .foregroundStyle(entry.id == current ? Color.accent : .primary)
-                                Text(entry.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            Spacer()
-                            if entry.id == current {
-                                Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.accent)
-                            }
+            // From the song that plays onward, as in Spotify: the covers that show first
+            // are the ones that load first.
+            List(entries) { entry in
+                Button { Task { await sonos.playFromQueue(entry.id) } } label: {
+                    HStack(spacing: 12) {
+                        Artwork(url: entry.artworkURL).frame(width: 44, height: 44)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.title).lineLimit(1)
+                                .foregroundStyle(entry.id == current ? Color.accent : .primary)
+                            Text(entry.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                        if entry.id == current {
+                            Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.accent)
                         }
                     }
-                    .id(entry.id)
                 }
-                .overlay {
-                    if entries.isEmpty { ContentUnavailableView("The queue is empty", systemImage: "list.bullet") }
-                }
-                .task {
-                    entries = await sonos.queue()
-                    proxy.scrollTo(max(0, current), anchor: .top)
+                .tint(.primary)
+                .id(entry.id)
+                .listRowBackground(Color.clear)
+                .swipeActions(edge: .trailing) {
+                    // The song that plays stays; remove the others.
+                    if entry.id != current {
+                        Button("Remove", systemImage: "trash", role: .destructive) { remove(entry) }
+                    }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .overlay {
+                if entries.isEmpty { ContentUnavailableView("The queue is empty", systemImage: "list.bullet") }
+            }
+            .task { entries = await sonos.queue(from: current) }
             .navigationTitle("Queue")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Done") { dismiss() } }
+        }
+    }
+
+    private func remove(_ entry: QueueEntry) {
+        withAnimation { entries.removeAll { $0.id == entry.id } }
+        Task {
+            await sonos.removeFromQueue(entry.id)
+            // The places after it moved up by one; read them again.
+            entries = await sonos.queue(from: sonos.selectedStatus.queuePosition - 1)
         }
     }
 }

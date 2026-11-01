@@ -12,7 +12,11 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
   at the top right you sort Liked Songs and playlists by title, artist, album or
   **Recently added**; choose the same key again for the other direction. Play and
   Shuffle follow that order.
-- **Search** searches all of Spotify for songs, artists, albums and playlists.
+- **Sonos Radio** sits at the bottom of Home: its trending stations, and with
+  **Sonos Radio ›** all its rows plus Music, News & Talk, Sports and Locations.
+  The ▶ on a station plays it on the selected room instead of the queue.
+- **Search** searches all of Spotify for songs, artists, albums and playlists,
+  and Sonos Radio for stations (the **Radio** filter).
 - Each song has a ⋯ menu with **Play Next** and **Add to Queue**. Swipe right on a
   song, album or playlist for Play Next, left for Add to Queue; on a cover, touch
   and hold. The song that plays shows in green.

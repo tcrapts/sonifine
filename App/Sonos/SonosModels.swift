@@ -86,6 +86,10 @@ struct GroupStatus: Equatable {
     var spotifyTrack: SpotifyURI?
     /// The Spotify account Sonos plays it with.
     var spotifyAccount: SpotifyAccount?
+    /// The station, when the group plays radio instead of its queue.
+    var station: String?
+    /// The household's Sonos Radio account, when the group plays a Sonos Radio station.
+    var radioAccount: RadioAccount?
     /// The song's place in the queue, counted from 1.
     var queuePosition = 0
     var playMode = PlayMode.normal
@@ -94,7 +98,15 @@ struct GroupStatus: Equatable {
     /// True when this player plays along with another coordinator: the groups changed.
     var followsAnotherGroup = false
 
-    var displayTitle: String { title.isEmpty ? "Not playing" : title }
+    var displayTitle: String { title.isEmpty ? station ?? "Not playing" : title }
+    /// Radio has no queue, no shuffle or repeat and, for a live station, no length.
+    var playsRadio: Bool { station != nil }
+    /// The artist, album and station below the title, each once.
+    var details: [String] {
+        [artist, album, station ?? ""].reduce(into: []) { parts, part in
+            if !part.isEmpty, part != displayTitle, !parts.contains(part) { parts.append(part) }
+        }
+    }
 
     /// Where the song is at `date`: the reported position plus the time since, while playing.
     func position(at date: Date) -> TimeInterval {
@@ -176,4 +188,29 @@ struct QueueEntry: Identifiable, Equatable {
 struct Household: Equatable {
     let id: String
     let deviceID: String
+}
+
+/// A Sonos URI with its DIDL metadata: an item for `AddMultipleURIsToQueue`, or a
+/// stream for `SetAVTransportURI`.
+struct SonosQueueItem: Equatable {
+    let uri: String
+    let metadata: String
+}
+
+extension SonosQueueItem {
+    /// An item of a music service. The metadata names the service as
+    /// `SA_RINCON<type>_X_#Svc<type>-0-Token`, where the type is the service ID × 256 + 7.
+    init(uri: String, itemID: String, title: String = "", upnpClass: String, serviceType: Int) {
+        let metadata = """
+        <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" \
+        xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" \
+        xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" \
+        xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">\
+        <item id="\(itemID)" parentID="-1" restricted="true"><dc:title>\(title.xmlEscaped)</dc:title>\
+        <upnp:class>\(upnpClass)</upnp:class>\
+        <desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">\
+        SA_RINCON\(serviceType)_X_#Svc\(serviceType)-0-Token</desc></item></DIDL-Lite>
+        """
+        self.init(uri: uri, metadata: metadata)
+    }
 }

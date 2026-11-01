@@ -56,18 +56,7 @@ struct SpotifyURI: Hashable, CustomStringConvertible {
         case .artist, .other:
             return nil
         }
-        let serviceType = account.serviceType
-        let metadata = """
-        <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" \
-        xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" \
-        xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" \
-        xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">\
-        <item id="\(itemID)" parentID="-1" restricted="true"><dc:title></dc:title>\
-        <upnp:class>\(upnpClass)</upnp:class>\
-        <desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">\
-        SA_RINCON\(serviceType)_X_#Svc\(serviceType)-0-Token</desc></item></DIDL-Lite>
-        """
-        return SonosQueueItem(uri: uri, metadata: metadata)
+        return SonosQueueItem(uri: uri, itemID: itemID, upnpClass: upnpClass, serviceType: account.serviceType)
     }
 }
 
@@ -95,10 +84,4 @@ struct SpotifyAccount: Equatable {
 
     /// Sonos names a music service by its type: service ID × 256 + 7.
     var serviceType: Int { (Int(serviceID) ?? 9) * 256 + 7 }
-}
-
-/// An item ready for `AddMultipleURIsToQueue`: its Sonos URI and DIDL metadata.
-struct SonosQueueItem: Equatable {
-    let uri: String
-    let metadata: String
 }

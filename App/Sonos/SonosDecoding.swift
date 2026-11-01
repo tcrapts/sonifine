@@ -74,10 +74,17 @@ extension SonosDevice {
 }
 
 extension GroupStatus {
+    /// The URI schemes of radio, which plays instead of the queue.
+    private static let radioSchemes = ["x-sonosapi-radio:", "x-sonosapi-stream:", "x-sonosapi-hls:", "x-rincon-mp3radio:", "aac:"]
+
     /// The status from the answers to `GetGroupVolume`, `GetTransportInfo`,
-    /// `GetPositionInfo` and `GetTransportSettings`.
-    init(volume: XMLNode, transport: XMLNode, position: XMLNode, settings: XMLNode?, player: URL, at date: Date = .now) {
+    /// `GetPositionInfo`, `GetTransportSettings` and `GetMediaInfo`.
+    init(volume: XMLNode, transport: XMLNode, position: XMLNode, settings: XMLNode?, media: XMLNode? = nil,
+         player: URL, at date: Date = .now) {
         let trackURI = position.value("TrackURI") ?? ""
+        let sourceURI = media?.value("CurrentURI") ?? ""
+        let isRadio = Self.radioSchemes.contains { sourceURI.hasPrefix($0) }
+        let source = media?.value("CurrentURIMetaData").flatMap { XMLNode.parse($0) }
         let track = position.value("TrackMetaData").flatMap { XMLNode.parse($0) }
         let state = transport.value("CurrentTransportState")
         // Radio puts the station in the title and the song in `streamContent`.
@@ -96,6 +103,8 @@ extension GroupStatus {
             artworkURL: track?.value("albumArtURI").flatMap { URL(sonosArtwork: $0, player: player) },
             spotifyTrack: SpotifyURI(sonosTrackURI: trackURI),
             spotifyAccount: SpotifyAccount(sonosTrackURI: trackURI),
+            station: isRadio ? source?.value("title") ?? title ?? "Radio" : nil,
+            radioAccount: RadioAccount(sonosURI: sourceURI) ?? RadioAccount(sonosURI: trackURI),
             queuePosition: position.value("Track").flatMap(Int.init) ?? 0,
             playMode: settings?.value("PlayMode").map(PlayMode.init(sonos:)) ?? .normal,
             followsAnotherGroup: trackURI.hasPrefix("x-rincon:"))

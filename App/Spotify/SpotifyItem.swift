@@ -41,6 +41,8 @@ enum PlayRequest: Equatable {
     case collection(SpotifyURI, start: SpotifyURI?, shuffle: Bool)
     /// An artist's best known songs; the catalog looks them up first.
     case artist(SpotifyItem, shuffle: Bool)
+    /// A Sonos Radio station, which plays instead of the queue.
+    case station(RadioItem)
 
     /// The request for a tap on `item`.
     ///

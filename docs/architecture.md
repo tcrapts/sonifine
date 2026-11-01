@@ -8,16 +8,19 @@ through one `\.play` action.
 | --- | --- | --- |
 | `SonosController` | `App/Sonos/` | `SonosPlayer`: `SOAPSonosPlayer` talks UPnP to a player |
 | `SpotifyCatalog` | `App/Spotify/` | `SpotifyWebAPI` (library sign-in), `SonosSpotifyService` (link) |
+| `RadioCatalog` | `App/Radio/` | `SonosRadioService`: Sonos Radio, without sign-in |
 
 `App/Support/` holds the seams every adapter shares: `HTTPTransport`,
-`SecretStore` (the Keychain) and `XMLNode`, the one XML reader. `ImageCache`
+`SecretStore` (the Keychain), `XMLNode`, the one XML reader, and `SMAPI`, the
+SOAP request and browse JSON of Sonos music services. `ImageCache`
 keeps covers in memory, decoded; after each song change the app loads the covers
 of the next three songs in the queue (`SonosController.upcomingArtwork`).
 `App/Volume/VolumeButtonWatcher` turns presses into
 `SonosController.nudgeVolume`; `VolumePress` holds its rules.
 `App/Volume/NowPlayingSession` keeps the buttons and the lock screen for the app.
-`PlayRequest` decides what a tap queues; `SpotifyURI` parses every Spotify URI
-and encodes it for the Sonos queue.
+`PlayRequest` decides what a tap plays; `SpotifyURI` parses every Spotify URI
+and encodes it for the Sonos queue; `RadioItem` encodes a station for the
+transport URI.
 
 ## Sonos
 
@@ -30,8 +33,10 @@ and encodes it for the Sonos queue.
   (group volume), `ContentDirectory` (`Browse Q:0` for the queue),
   `DeviceProperties` (household ID) and `ZoneGroupTopology`.
 - **Status.** `refresh()` reads the status of every group every three seconds
-  and after each action: volume, transport state, position, play mode and the
-  track metadata.
+  and after each action: volume, transport state, position, play mode, the
+  track metadata and, from `GetMediaInfo`, the source. A `CurrentURI` such as
+  `x-sonosapi-radio:` or `x-sonosapi-stream:` means radio: `GroupStatus.station`
+  holds the station from `CurrentURIMetaData`.
 - **Room sound and devices.** Bass, treble, loudness and Trueplay belong to a
   room, so they go to the room's own player:
   `RenderingControl` `GetBass`/`SetBass`, `GetTreble`/`SetTreble`,
@@ -59,6 +64,27 @@ song, and plays. `SpotifyURI.queueItem` builds each URI and its DIDL metadata:
 | `spotify:track:<id>` | `x-sonos-spotify:spotify%3atrack%3a<id>?sid=9&flags=8224&sn=1` |
 
 The metadata names the service as `SA_RINCON<sid × 256 + 7>_X_#Svc…-0-Token`.
+
+## Playing Sonos Radio
+
+Sonos Radio (service 303) plays as the transport URI instead of the queue, as
+[ADR 0005](adr/0005-play-sonos-radio-as-the-transport-uri.md) explains.
+`SonosController.play(.station)` hands `SOAPSonosPlayer.playStream` the URI and
+DIDL from `RadioItem.stream(account:)`; it sends `SetAVTransportURI` and `Play`.
+
+| Station | Sonos URI |
+| --- | --- |
+| `sonos:<n>` (Sonos Radio's own) | `x-sonosapi-radio:<n>?sid=303&flags=0&sn=<account>` |
+| `tunein:<n>` (live) | `x-sonosapi-stream:tunein%3a<n>?sid=303&flags=8232&sn=<account>` |
+
+The account number comes from a Sonos Radio URI a group played, stored under
+`sonosRadioSerialNumber`. `SonosRadioService` reads, without sign-in:
+`GET https://sali.sonos.superhi.fi/browse/v1` for the home rows and SOAP
+`getMetadata` (a category) and `search` (`id` `stations`) on
+`https://sali.sonos.superhi.fi/smapi`.
+
+While radio plays, Now Playing hides the progress and turns off shuffle and repeat; the
+covers ahead and beside come from no queue.
 
 ## The two Spotify connections
 
@@ -97,7 +123,7 @@ background the silence stops ten minutes after the Sonos pauses (`KeepAwake`).
 
 `SonifineApp` holds four tabs (Home, Library, Search, System), each a
 `NavigationStack` with the mini-player above the tab bar. Every screen opens
-through a value (`SpotifyItem`, `LibraryPage`) and `spotifyDestinations()`;
+through a value (`SpotifyItem`, `LibraryPage`, `RadioPage`) and `spotifyDestinations()`;
 mixing in destination links breaks value navigation in pushed screens.
 The room settings open the same way, through a `SonosRoom`: the slider button on
 a room card on the System tab, or **Rooms** in the ⚙️ sheet.

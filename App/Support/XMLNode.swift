@@ -68,3 +68,12 @@ private final class TreeBuilder: NSObject, XMLParserDelegate {
         }
     }
 }
+
+extension String {
+    /// The text with `&`, `<` and `>` escaped, to put inside an XML element.
+    var xmlEscaped: String {
+        replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+}

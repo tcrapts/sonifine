@@ -49,6 +49,7 @@ final class SonosController {
     private var knownPlayers: [URL] = []
     private var householdID: String?
     private var account: SpotifyAccount
+    private var radioAccount: RadioAccount?
     /// When the user last changed a group. Polls that started earlier are stale for it.
     private var lastAction: [String: Date] = [:]
     private var pendingVolume: (groupID: String, adjustment: Int)?
@@ -65,6 +66,7 @@ final class SonosController {
         selectedRoomID = defaults.string(forKey: "selectedRoomID") ?? defaults.string(forKey: "selectedGroupID")
         account = SpotifyAccount(serviceID: defaults.string(forKey: "spotifyServiceID") ?? "9",
                                  accountNumber: defaults.string(forKey: "spotifySerialNumber") ?? "1")
+        radioAccount = defaults.string(forKey: "sonosRadioSerialNumber").map(RadioAccount.init(accountNumber:))
     }
 
     func select(_ group: SonosGroup) {
@@ -158,6 +160,7 @@ final class SonosController {
                     status.volume = statuses[id]?.volume ?? status.volume
                 }
                 remember(status.spotifyAccount)
+                remember(status.radioAccount)
                 regrouped = regrouped || status.followsAnotherGroup
                 if statuses[id].map(status.differs(from:)) ?? true { statuses[id] = status }
             }
@@ -241,30 +244,37 @@ final class SonosController {
         await perform(on: group) { try await $0.setPlayMode(mode) }
     }
 
-    /// The songs in the queue of the selected group, up to 200.
-    func queue() async -> [QueueEntry] {
+    /// The songs in the queue of the selected group, up to 200, from place `start` counted from 0.
+    func queue(from start: Int = 0) async -> [QueueEntry] {
         guard let group = selectedGroup else { return [] }
-        return (try? await player(group).queue()) ?? []
+        return (try? await player(group).queue(from: max(start, 0), count: 200)) ?? []
     }
 
     /// The covers of the next `count` songs, to load before they play.
     func upcomingArtwork(count: Int = 3) async -> [URL] {
-        guard let group = selectedGroup else { return [] }
+        guard let group = selectedGroup, !selectedStatus.playsRadio else { return [] }
         // `queuePosition` counts from 1, so it is also the place of the next song counted from 0.
         let next = (try? await player(group).queue(from: selectedStatus.queuePosition, count: count)) ?? []
         return next.compactMap(\.artworkURL)
     }
 
     /// The covers of the songs before and after the current one in the queue, for
-    /// the cover strip in Now Playing. Shuffle plays in another order, so then both are nil.
+    /// the cover strip in Now Playing. Shuffle plays in another order, and radio
+    /// plays apart from the queue, so then both are nil.
     func neighbourArtwork() async -> (previous: URL?, next: URL?) {
         let position = selectedStatus.queuePosition  // counted from 1
-        guard let group = selectedGroup, position > 0, !selectedStatus.playMode.shuffle else { return (nil, nil) }
+        guard let group = selectedGroup, position > 0, !selectedStatus.playMode.shuffle, !selectedStatus.playsRadio
+        else { return (nil, nil) }
         let start = max(position - 2, 0)
         let songs = (try? await player(group).queue(from: start, count: position - start + 1)) ?? []
         let previous = songs.first { $0.id == position - 2 }
         let next = songs.first { $0.id == position }
         return (previous?.artworkURL, next?.artworkURL)
+    }
+
+    /// Takes the song at `index`, counted from 0, out of the queue of the selected group.
+    func removeFromQueue(_ index: Int) async {
+        await performOnSelected { try await $0.removeFromQueue(index) }
     }
 
     /// Plays the song at `index` in the queue, counted from 0.
@@ -304,8 +314,9 @@ final class SonosController {
         }
     }
 
-    /// Replaces the queue of the selected group and plays it. A new request
-    /// waits for the one before it, so two taps never mix their queues.
+    /// Plays a request on the selected group: songs replace its queue, a station
+    /// plays instead of it. A new request waits for the one before it, so two
+    /// taps never mix their queues.
     func play(_ request: PlayRequest) async {
         let previous = playback
         previous?.cancel()
@@ -325,6 +336,7 @@ final class SonosController {
         case .songs(let songs, _, let random): (uris, shuffle) = (songs, random)
         case .collection(let collection, _, let random): (uris, shuffle) = ([collection], random)
         case .artist: return // The catalog turns an artist into songs first.
+        case .station(let station): return await play(station, on: group)
         }
         let items = uris.compactMap { $0.queueItem(account: account) }
         guard !items.isEmpty else {
@@ -370,9 +382,35 @@ final class SonosController {
             return start > 0 ? start + 1 : nil
         case .collection(_, let start?, _):
             return try await player.queue().first { $0.spotifyTrack == start }.map { $0.id + 1 }
-        case .collection, .artist:
+        case .collection, .artist, .station:
             return nil
         }
+    }
+
+    /// Plays a Sonos Radio station on `group` instead of its queue. It needs the
+    /// household's Sonos Radio account, which the app reads from a station Sonos plays.
+    private func play(_ station: RadioItem, on group: SonosGroup) async {
+        guard let radioAccount else {
+            actionError = "Play a Sonos Radio station once in the Sonos app, so Sonifine knows your Sonos Radio account."
+            return
+        }
+        guard let stream = station.stream(account: radioAccount) else {
+            actionError = "Sonos can't play this."
+            return
+        }
+        isStartingPlayback = true
+        defer { isStartingPlayback = false }
+        lastAction[group.id] = .now
+        do {
+            try await player(group).playStream(stream)
+            statuses[group.id]?.isPlaying = true
+            actionError = nil
+        } catch {
+            guard !HTTP.isCancellation(error) else { return }
+            actionError = "Couldn't play \(station.name) on \(group.name): \(error.localizedDescription)"
+        }
+        lastAction[group.id] = .now
+        await refresh([group])
     }
 
     // MARK: Rooms
@@ -435,6 +473,12 @@ final class SonosController {
         }
         lastAction[group.id] = .now
         await refresh([group])
+    }
+
+    private func remember(_ found: RadioAccount?) {
+        guard let found, found != radioAccount else { return }
+        radioAccount = found
+        defaults.set(found.accountNumber, forKey: "sonosRadioSerialNumber")
     }
 
     private func remember(_ found: SpotifyAccount?) {

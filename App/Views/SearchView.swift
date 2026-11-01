@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// Searches all of Spotify, with a filter per kind.
+/// Searches all of Spotify and the stations of Sonos Radio, with a filter per kind.
 struct SearchView: View {
     private enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", songs = "Songs", artists = "Artists", albums = "Albums", playlists = "Playlists"
+        case all = "All", songs = "Songs", artists = "Artists", albums = "Albums", playlists = "Playlists", radio = "Radio"
         var id: Self { self }
     }
 
     @Environment(SpotifyCatalog.self) private var catalog
+    @Environment(RadioCatalog.self) private var radio
     @Environment(\.play) private var play
     @State private var query = ""
     @State private var filter = Filter.all
@@ -29,21 +30,32 @@ struct SearchView: View {
                 shelf("Artists", results.artists)
                 shelf("Albums", results.albums)
                 shelf("Playlists", results.playlists)
+                if !radio.searchResults.isEmpty {
+                    StationShelf(title: "Radio", items: radio.searchResults)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                }
             case .songs: rows("Songs", results.tracks, playing: results.tracks)
             case .artists: rows("Artists", results.artists)
             case .albums: rows("Albums", results.albums)
             case .playlists: rows("Playlists", results.playlists)
+            case .radio:
+                if !radio.searchResults.isEmpty {
+                    Section("Radio") { ForEach(radio.searchResults) { RadioRow(item: $0) } }
+                }
             }
-            if let message = catalog.errorMessage {
+            if let message = catalog.errorMessage ?? radio.errorMessage {
                 Text(message).font(.footnote).foregroundStyle(.red)
             }
         }
         .overlay {
-            if !catalog.isSignedIn {
-                ScrollView { SpotifySignIn().padding() }
-            } else if query.isEmpty {
-                ContentUnavailableView("Search Spotify", systemImage: "magnifyingglass",
-                                       description: Text("Songs, artists, albums and playlists"))
+            if query.isEmpty {
+                if catalog.isSignedIn {
+                    ContentUnavailableView("Search Spotify and radio", systemImage: "magnifyingglass",
+                                           description: Text("Songs, artists, albums, playlists and stations"))
+                } else {
+                    ScrollView { SpotifySignIn().padding() }
+                }
             }
         }
         .navigationTitle("Search")
@@ -52,7 +64,9 @@ struct SearchView: View {
         .task(id: query) {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            await catalog.search(query)
+            async let spotify: Void = catalog.search(query)
+            async let stations: Void = radio.search(query)
+            _ = await (spotify, stations)
         }
     }
 

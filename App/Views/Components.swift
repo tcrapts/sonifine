@@ -77,10 +77,11 @@ private struct QueueButtonsSingle: View {
 }
 
 extension View {
-    /// Opens playlists, albums and artists, and the pages of the library.
+    /// Opens playlists, albums and artists, the pages of the library and those of Sonos Radio.
     func spotifyDestinations() -> some View {
         navigationDestination(for: SpotifyItem.self) { DetailView(item: $0) }
             .navigationDestination(for: LibraryPage.self) { LibraryPageView(page: $0) }
+            .navigationDestination(for: RadioPage.self) { RadioPageView(page: $0) }
     }
 }
 
@@ -118,14 +119,7 @@ struct Card: View {
                 } else {
                     cover
                 }
-                Button { play(.tap(item, in: list)) } label: {
-                    Image(systemName: "play.fill").font(.title3).foregroundStyle(.black)
-                        .frame(width: 40, height: 40)
-                        .background(Color.accent, in: .circle)
-                        .shadow(radius: 4)
-                }
-                .padding(8)
-                .accessibilityLabel("Play \(item.name)")
+                PlayCircle(name: item.name) { play(.tap(item, in: list)) }
             }
             Text(item.name).font(.subheadline.bold()).lineLimit(1)
             Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -137,6 +131,23 @@ struct Card: View {
     private var cover: some View {
         Artwork(url: item.imageURL, round: item.kind == .artist, cornerRadius: 8)
             .frame(width: size, height: size)
+    }
+}
+
+/// The round green button on a cover that plays it at once.
+struct PlayCircle: View {
+    let name: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "play.fill").font(.title3).foregroundStyle(.black)
+                .frame(width: 40, height: 40)
+                .background(Color.accent, in: .circle)
+                .shadow(radius: 4)
+        }
+        .padding(8)
+        .accessibilityLabel("Play \(name)")
     }
 }
 

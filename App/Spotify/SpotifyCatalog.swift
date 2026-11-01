@@ -128,7 +128,7 @@ final class SpotifyCatalog {
 
     func search(_ query: String) async {
         let query = query.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else {
+        guard !query.isEmpty, isSignedIn else {
             searchResults = SpotifySearchResults()
             return
         }

@@ -66,3 +66,18 @@ developer.spotify.com. It gives the library, search, artists and Liked Songs.
 **Spotify account on Sonos**:
 The Spotify account that is added in the Sonos app. Playback always uses it, as
 service `sid=9` with account `sn=1`, read from the track URIs Sonos plays.
+
+## Sonos Radio
+
+**Sonos Radio**:
+Sonos's own free radio, service `sid=303`. Browsing and searching need no
+sign-in.
+
+**Station**:
+Something Sonos Radio plays without end: a program of its own (`sonos:2997`)
+or a live station (`tunein:5668`). A station plays instead of the queue and
+leaves the queue as it was.
+
+**Sonos Radio account**:
+The household's account for Sonos Radio, account number `sn`, which differs per
+household. The app reads it from a Sonos Radio station a group plays.

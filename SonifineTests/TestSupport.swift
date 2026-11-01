@@ -97,6 +97,8 @@ final class FakeSonosPlayer: SonosPlayer {
     private(set) var seeks: [Int] = []
     private(set) var playModes: [PlayMode] = []
     private(set) var plays = 0
+    /// The streams `playStream` played, such as radio stations.
+    private(set) var streams: [SonosQueueItem] = []
 
     func zoneGroups() async throws -> [SonosGroup] { groups }
     func householdID() async throws -> String { "Sonos_Household" }
@@ -119,6 +121,7 @@ final class FakeSonosPlayer: SonosPlayer {
     func next() async throws {}
     func previous() async throws {}
     func seek(toTrack number: Int) async throws { seeks.append(number) }
+    func removeFromQueue(_ index: Int) async throws { queueEntries.remove(at: index) }
     func seek(to seconds: TimeInterval) async throws {}
     func setPlayMode(_ mode: PlayMode) async throws { playModes.append(mode) }
 
@@ -132,6 +135,11 @@ final class FakeSonosPlayer: SonosPlayer {
         if let failure { throw failure }
         additions.append((items, current))
         return items.count
+    }
+
+    func playStream(_ item: SonosQueueItem) async throws {
+        if let failure { throw failure }
+        streams.append(item)
     }
 
     func queue(from start: Int, count: Int) async throws -> [QueueEntry] {

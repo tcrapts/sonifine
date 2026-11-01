@@ -21,6 +21,8 @@ protocol SonosPlayer {
     func previous() async throws
     /// Jumps to the song at `number` in the queue, counted from 1.
     func seek(toTrack number: Int) async throws
+    /// Takes the song at `index`, counted from 0, out of the queue.
+    func removeFromQueue(_ index: Int) async throws
     func seek(to seconds: TimeInterval) async throws
     func setPlayMode(_ mode: PlayMode) async throws
 
@@ -32,6 +34,8 @@ protocol SonosPlayer {
     func addToQueue(_ items: [SonosQueueItem], after current: Int?) async throws -> Int
     /// `count` songs of the queue from place `start`, counted from 0.
     func queue(from start: Int, count: Int) async throws -> [QueueEntry]
+    /// Plays a stream, such as a radio station, instead of the queue. The queue stays.
+    func playStream(_ item: SonosQueueItem) async throws
 
     /// Bass, treble, loudness and Trueplay of this player's room.
     func soundSettings() async throws -> SoundSettings
@@ -66,8 +70,9 @@ final class SOAPSonosPlayer: SonosPlayer {
         async let transport = call(.avTransport, "GetTransportInfo")
         async let position = call(.avTransport, "GetPositionInfo")
         async let settings = call(.avTransport, "GetTransportSettings")
+        async let media = call(.avTransport, "GetMediaInfo")
         return try await GroupStatus(volume: volume, transport: transport, position: position,
-                                     settings: try? settings, player: address)
+                                     settings: try? settings, media: try? media, player: address)
     }
 
     func adjustVolume(by adjustment: Int) async throws -> Int {
@@ -91,6 +96,12 @@ final class SOAPSonosPlayer: SonosPlayer {
 
     func seek(toTrack number: Int) async throws {
         _ = try await call(.avTransport, "Seek", ["InstanceID": "0", "Unit": "TRACK_NR", "Target": String(number)])
+    }
+
+    func removeFromQueue(_ index: Int) async throws {
+        // UpdateID 0 skips Sonos's check that the queue didn't change in between.
+        _ = try await call(.avTransport, "RemoveTrackFromQueue",
+                           ["InstanceID": "0", "ObjectID": "Q:0/\(index + 1)", "UpdateID": "0"])
     }
 
     func seek(to seconds: TimeInterval) async throws {
@@ -139,6 +150,12 @@ final class SOAPSonosPlayer: SonosPlayer {
         return QueueEntry.entries(fromDIDL: response.value("Result") ?? "", player: address, startingAt: start)
     }
 
+    func playStream(_ item: SonosQueueItem) async throws {
+        _ = try await call(.avTransport, "SetAVTransportURI",
+                           ["InstanceID": "0", "CurrentURI": item.uri, "CurrentURIMetaData": item.metadata])
+        try await play()
+    }
+
     func soundSettings() async throws -> SoundSettings {
         async let bass = call(.renderingControl, "GetBass")
         async let treble = call(.renderingControl, "GetTreble")
@@ -172,7 +189,7 @@ final class SOAPSonosPlayer: SonosPlayer {
 
     private func call(_ service: Service, _ action: String,
                       _ arguments: KeyValuePairs<String, String> = ["InstanceID": "0"]) async throws -> XMLNode {
-        let body = arguments.map { "<\($0.key)>\(Self.escape($0.value))</\($0.key)>" }.joined()
+        let body = arguments.map { "<\($0.key)>\($0.value.xmlEscaped)</\($0.key)>" }.joined()
         let envelope = """
         <?xml version="1.0" encoding="utf-8"?>\
         <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" \
@@ -194,13 +211,6 @@ final class SOAPSonosPlayer: SonosPlayer {
                            code: code)
         }
         return response
-    }
-
-    private static func escape(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
     }
 
     /// The UPnP services of a player that the app uses.

@@ -215,6 +215,16 @@ struct SOAPSonosPlayerTests {
         #expect(recorded.requests[1].bodyText.contains("<NumberOfURIs>16</NumberOfURIs>"))
     }
 
+    @Test func removingASongNamesItsPlaceInTheQueueCountedFromOne() async throws {
+        let recorded = RecordedTransport()
+        recorded.answer(soapAction: "RemoveTrackFromQueue", (200, soapAnswer("RemoveTrackFromQueue", "")))
+        let player = SOAPSonosPlayer(address: URL(string: "http://10.0.0.2:1400")!, transport: recorded.transport)
+
+        try await player.removeFromQueue(2)
+
+        #expect(recorded.requests.last?.bodyText.contains("<ObjectID>Q:0/3</ObjectID>") == true)
+    }
+
     @Test func playNextAsksSonosForThePlaceAfterTheCurrentSong() async throws {
         let recorded = RecordedTransport()
         recorded.answer(soapAction: "AddMultipleURIsToQueue",

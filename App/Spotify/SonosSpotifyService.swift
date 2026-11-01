@@ -11,7 +11,6 @@ import Foundation
 final class SonosSpotifyService {
     private static let service = URL(string: "https://spotify-v5.ws.sonos.com/smapi")!
     private static let browse = URL(string: "https://spotify-v5.ws.sonos.com/v1/browse")!
-    private static let namespace = "http://www.sonos.com/Services/1.1"
     private enum Keys {
         static let token = "sonosSpotifyToken"
         static let key = "sonosSpotifyKey"
@@ -79,19 +78,19 @@ final class SonosSpotifyService {
 
     /// The rows of the Spotify home, without "Your Library".
     func home(household: Household) async throws -> [HomeShelf] {
-        let page: BrowsePage = try await withFreshKey(household: household) { token in
+        let page: SMAPIBrowsePage = try await withFreshKey(household: household) { token in
             var request = URLRequest(url: Self.browse, timeoutInterval: 10)
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             let (data, status) = try await transport(request)
             if status == 401 { throw KeyExpired() }
             guard status == 200 else { throw AppError("The Spotify home didn't load (\(status)).") }
-            return try JSONDecoder().decode(BrowsePage.self, from: data)
+            return try JSONDecoder().decode(SMAPIBrowsePage.self, from: data)
         }
         return page.views.filter { $0.id.objectId != "yourmusic_root" }.compactMap { view in
             let items = view.items?.compactMap(\.spotifyItem) ?? []
             guard !items.isEmpty else { return nil }
-            return HomeShelf(id: view.id.objectId, title: Self.shelfTitle(view.content.container?.name ?? ""),
+            return HomeShelf(id: view.id.objectId, title: Self.shelfTitle(view.content.details?.name ?? ""),
                              items: items)
         }
     }
@@ -153,19 +152,9 @@ final class SonosSpotifyService {
             }
             login = "<loginToken><token>\(token)</token><key>\(key)</key><householdId>\(household.id)</householdId></loginToken>"
         }
-        let envelope = """
-        <?xml version="1.0" encoding="utf-8"?>\
-        <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Header>\
-        <credentials xmlns="\(Self.namespace)"><deviceId>\(deviceID)</deviceId>\
-        <deviceProvider>Sonos</deviceProvider>\(login)</credentials></s:Header>\
-        <s:Body><\(action) xmlns="\(Self.namespace)">\(body)</\(action)></s:Body></s:Envelope>
-        """
-        var request = URLRequest(url: Self.service, timeoutInterval: 10)
-        request.httpMethod = "POST"
-        request.setValue("text/xml; charset=\"utf-8\"", forHTTPHeaderField: "Content-Type")
-        request.setValue("\"\(Self.namespace)#\(action)\"", forHTTPHeaderField: "SOAPACTION")
-        request.httpBody = Data(envelope.utf8)
-
+        let request = SMAPI.request(Self.service, action: action, body: body, credentials: """
+            <deviceId>\(deviceID)</deviceId><deviceProvider>Sonos</deviceProvider>\(login)
+            """)
         let (data, status) = try await transport(request)
         let response = XMLNode.parse(data)
         guard status == 200, let response else {
@@ -187,33 +176,12 @@ final class SonosSpotifyService {
 
 // MARK: Responses
 
-/// The JSON of `GET /v1/browse`: views (rows) of playlists, albums and artists.
-private struct BrowsePage: Decodable {
-    struct ObjectID: Decodable { let objectId: String }
-    struct Details: Decodable {
-        struct Artist: Decodable { let name: String? }
-        let name: String?
-        let type: String?
-        let imageUrl: String?
-        let artist: Artist?
+private extension SMAPIBrowsePage.Item {
+    /// A playlist, album or artist of the Spotify home.
+    var spotifyItem: SpotifyItem? {
+        guard let uri = SpotifyURI(id.objectId), let details = content.details, let name = details.name else { return nil }
+        return SpotifyItem(uri: uri, name: name,
+                           subtitle: details.artist?.name ?? details.type?.capitalized ?? "",
+                           imageURL: details.imageUrl.flatMap(URL.init(string:)))
     }
-    struct Content: Decodable { let container: Details?; let item: Details? }
-    struct Item: Decodable {
-        let id: ObjectID
-        let content: Content
-
-        var spotifyItem: SpotifyItem? {
-            guard let uri = SpotifyURI(id.objectId),
-                  let details = content.container ?? content.item, let name = details.name else { return nil }
-            return SpotifyItem(uri: uri, name: name,
-                               subtitle: details.artist?.name ?? details.type?.capitalized ?? "",
-                               imageURL: details.imageUrl.flatMap(URL.init(string:)))
-        }
-    }
-    struct View: Decodable {
-        let id: ObjectID
-        let content: Content
-        let items: [Item]?
-    }
-    let views: [View]
 }

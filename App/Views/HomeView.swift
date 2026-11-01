@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// The start screen: the Spotify home, one tap from playing.
+/// The start screen: the Spotify home and Sonos Radio, one tap from playing.
 struct HomeView: View {
     @Environment(SpotifyCatalog.self) private var catalog
     @Environment(SonosController.self) private var sonos
+    @Environment(RadioCatalog.self) private var radio
 
     var body: some View {
         ScrollView {
@@ -22,6 +23,10 @@ struct HomeView: View {
                     Shelf(title: "Recently played", items: catalog.library.recentlyPlayed)
                     Shelf(title: "Your albums", items: catalog.library.albums)
                 }
+                // The first row of Sonos Radio; its title opens all of it.
+                if let trending = radio.shelves.first {
+                    StationShelf(title: "Sonos Radio", items: trending.items, more: .home)
+                }
                 if !catalog.isSignedIn {
                     SpotifySignIn().padding(.horizontal)
                 }
@@ -32,7 +37,12 @@ struct HomeView: View {
             .padding(.vertical)
         }
         .navigationTitle(greeting)
-        .refreshable { await catalog.reload() }
+        .refreshable {
+            async let spotify: Void = catalog.reload()
+            async let stations: Void = radio.load()
+            _ = await (spotify, stations)
+        }
+        .task { if radio.shelves.isEmpty { await radio.load() } }
         // The Spotify home needs the household, so it loads once Sonos is found.
         .task(id: sonos.groups.isEmpty) {
             if catalog.homeShelves.isEmpty || catalog.library.playlists.isEmpty { await catalog.reload() }
