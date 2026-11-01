@@ -24,6 +24,8 @@ final class SpotifyCatalog {
     private(set) var linkPage: URL?
 
     private(set) var errorMessage: String?
+    /// Why the podcasts didn't load, such as Spotify's quota, while the rest of the library did.
+    private(set) var podcastsMessage: String?
 
     private let webAPI: SpotifyWebAPI
     private let sonosService: SonosSpotifyService
@@ -141,13 +143,17 @@ final class SpotifyCatalog {
                     // Spotify's quota is small: ask the Web API only what the link lacks.
                     (loaded.shows, loaded.recentlyPlayed, loaded.jumpBackIn) =
                         try await webAPI.extras(known: loaded.playlists + loaded.albums)
+                    podcastsMessage = nil
                 } else {
                     loaded = try await webAPI.library()
                 }
             } catch {
                 // Without the link the Web API is the only source; with it, the rest still stands.
                 if !isLinked || HTTP.isCancellation(error) { failure = failure ?? error }
-                else { log.error("web library: \(String(describing: error))") }
+                else {
+                    log.error("web library: \(String(describing: error))")
+                    podcastsMessage = error.localizedDescription
+                }
             }
         }
         if let failure {

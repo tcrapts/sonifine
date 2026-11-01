@@ -34,6 +34,8 @@ final class SpotifyWebAPI {
     private let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
     private var pausedUntil = Date.distantPast
     private var pause: TimeInterval = 60
+    /// Whether the last refusal was the developer quota rather than a short rate limit.
+    private var isOverQuota = false
 
     /// Called when Spotify no longer accepts the sign-in.
     var onSignedOut: () -> Void = {}
@@ -300,7 +302,7 @@ final class SpotifyWebAPI {
 
     private func send(_ method: String, _ path: String) async throws -> Data {
         // Every request during a pause would make Spotify's limit last longer.
-        guard Date.now >= pausedUntil else { throw Self.slowDown(until: pausedUntil) }
+        guard Date.now >= pausedUntil else { throw Self.slowDown(until: pausedUntil, quota: isOverQuota) }
         var request = URLRequest(url: URL(string: "https://api.spotify.com/v1" + path)!)
         request.httpMethod = method
         request.setValue("Bearer \(try await validAccessToken())", forHTTPHeaderField: "Authorization")
@@ -314,7 +316,8 @@ final class SpotifyWebAPI {
             let quota = String(decoding: data, as: UTF8.self).contains("QUOTA_EXCEEDED")
             pausedUntil = Date.now.addingTimeInterval(quota ? 60 * 60 : pause)
             pause = min(pause * 2, 30 * 60)
-            throw Self.slowDown(until: pausedUntil)
+            isOverQuota = quota
+            throw Self.slowDown(until: pausedUntil, quota: quota)
         }
         pause = 60
         if status == 403 { throw MissingPermission() }
@@ -325,9 +328,11 @@ final class SpotifyWebAPI {
         return data
     }
 
-    private static func slowDown(until date: Date) -> AppError {
+    private static func slowDown(until date: Date, quota: Bool) -> AppError {
         let minutes = max(1, Int((date.timeIntervalSinceNow / 60).rounded(.up)))
-        return AppError("Spotify asks Sonifine to slow down. It tries again in \(minutes) min.")
+        return AppError(quota
+            ? "Spotify's quota for this app is used up. Sonifine tries again in \(minutes) min."
+            : "Spotify asks Sonifine to slow down. It tries again in \(minutes) min.")
     }
 
     private static func encode(_ query: String) -> String {

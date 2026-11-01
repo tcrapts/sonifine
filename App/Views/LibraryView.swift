@@ -17,7 +17,8 @@ struct LibraryView: View {
                     link("Playlists", systemImage: "music.note.list", count: catalog.library.playlists.count, page: .playlists)
                     link("Liked Songs", systemImage: "heart.fill", count: catalog.library.likedSongs.count, page: .likedSongs)
                     link("Albums", systemImage: "square.stack.fill", count: catalog.library.albums.count, page: .albums)
-                    link("Podcasts", systemImage: "mic.fill", count: catalog.library.shows.count, page: .podcasts)
+                    link("Podcasts", systemImage: "mic.fill", count: catalog.library.shows.count, page: .podcasts,
+                         note: catalog.library.shows.isEmpty ? catalog.podcastsMessage : nil)
                 }
                 .refreshable { await catalog.reload() }
             } else {
@@ -27,7 +28,8 @@ struct LibraryView: View {
         .navigationTitle("Library")
     }
 
-    private func link(_ title: String, systemImage: String, count: Int, page: LibraryPage) -> some View {
+    /// A row of the library; `note` says why it is empty, such as Spotify's quota.
+    private func link(_ title: String, systemImage: String, count: Int, page: LibraryPage, note: String? = nil) -> some View {
         NavigationLink(value: page) {
             HStack(spacing: 14) {
                 Image(systemName: systemImage).font(.title3).foregroundStyle(Color.accent)
@@ -35,7 +37,11 @@ struct LibraryView: View {
                     .background(Color.accent.opacity(0.15), in: .rect(cornerRadius: 10))
                 VStack(alignment: .leading) {
                     Text(title).font(.headline)
-                    Text("\(count)").font(.caption).foregroundStyle(.secondary)
+                    if let note {
+                        Text(note).font(.caption).foregroundStyle(.orange)
+                    } else {
+                        Text("\(count)").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
         }
