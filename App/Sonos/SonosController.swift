@@ -423,15 +423,16 @@ final class SonosController {
         await refresh([group])
     }
 
-    /// Whether the speaker starts playing within a few seconds. With a wrong account
-    /// number it stops instead.
+    /// Whether the speaker plays. A live stream can take the speaker many seconds to
+    /// buffer, so starting counts until the speaker plays or stops; a wrong account
+    /// number makes it stop.
     private func plays(_ player: SonosPlayer) async throws -> Bool {
-        for _ in 0..<8 {
+        for _ in 0..<30 {
             try await Task.sleep(for: .milliseconds(500))
             let status = try await player.status()
             if !status.isStarting { return status.isPlaying }
         }
-        return false
+        return true
     }
 
     // MARK: Rooms
