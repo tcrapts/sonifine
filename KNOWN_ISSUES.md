@@ -27,12 +27,6 @@
 - **Impact:** an occasional press down that does nothing.
 - **Affected code:** `App/Volume/VolumeButtonWatcher.swift`, `VolumePress.needsMiddle`.
 
-## P3 — The heart needs an extra Spotify permission
-
-- **Description:** sign-ins made before the heart existed lack
-  `user-library-modify`. The first tap on the heart asks to sign in again.
-- **Affected code:** `App/Spotify/SpotifyWebAPI.swift`, `setLiked`.
-
 ## P3 — Artist Play queues few songs
 
 - **Description:** artist Play queues the artist's songs from a Web API search,

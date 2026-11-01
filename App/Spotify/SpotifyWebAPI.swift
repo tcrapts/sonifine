@@ -218,12 +218,13 @@ final class SpotifyWebAPI {
     // MARK: Liked Songs
 
     func isLiked(_ track: SpotifyURI) async throws -> Bool {
-        let result: [Bool] = try await get("/me/tracks/contains?ids=\(track.id)")
+        let result: [Bool] = try await get("/me/library/contains?uris=\(Self.encode(track.description))")
         return result.first ?? false
     }
 
     func setLiked(_ liked: Bool, _ track: SpotifyURI) async throws {
-        _ = try await send(liked ? "PUT" : "DELETE", "/me/tracks?ids=\(track.id)")
+        // Since February 2026, apps in development mode save through /me/library; /me/tracks answers 403.
+        _ = try await send(liked ? "PUT" : "DELETE", "/me/library?uris=\(Self.encode(track.description))")
     }
 
     // MARK: Requests
