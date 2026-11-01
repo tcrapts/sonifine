@@ -33,9 +33,10 @@ struct SonifineApp: App {
                 Tab("Search", systemImage: "magnifyingglass") { screen { SearchView() } }
                 Tab("System", systemImage: "hifispeaker.2.fill") { screen { SystemView() } }
             }
-            // The mini-player rides above the tab bar. Both stay full size while scrolling.
+            // The mini-player rides above the tab bar. Scrolling down folds the tab bar,
+            // and the mini-player moves into it, as in Apple Music.
             .tabViewBottomAccessory { MiniPlayer() }
-            .tabBarMinimizeBehavior(.never)
+            .tabBarMinimizeBehavior(.onScrollDown)
             .modifier(SpotifyLinkSheet())
             .modifier(VolumeOverlay())
             .environment(sonos)

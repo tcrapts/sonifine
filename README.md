@@ -13,13 +13,15 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
   **Recently added**; choose the same key again for the other direction. Play and
   Shuffle follow that order.
 - At the top of Home you choose **Spotify** or **Sonos Radio**. Sonos Radio shows
-  its rows of stations, then Music, News & Talk, Sports and Locations to browse.
+  Dutch radio first (NPO, Qmusic, 538, Sky Radio and more), then its rows of
+  stations, then Music, News & Talk, Sports and Locations to browse.
   The ▶ on a station plays it on the selected room instead of the queue.
 - **Search** searches all of Spotify for songs, artists, albums and playlists,
   and Sonos Radio for stations (the **Radio** filter).
 - Each song has a ⋯ menu with **Play Next** and **Add to Queue**. Swipe right on a
   song, album or playlist for Play Next, left for Add to Queue; on a cover, touch
   and hold. The song that plays shows in green.
+- Scrolling down folds the tab bar, and the mini-player moves into it.
 - **System** shows every room with what it plays, play/pause and volume.
 - The slider icon on a room (or **System → ⚙️ → Rooms**) shows the sound of that
   room: bass, treble, loudness, Trueplay and **Reset to default**. Below it are

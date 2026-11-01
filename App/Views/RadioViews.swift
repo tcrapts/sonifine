@@ -25,6 +25,9 @@ private struct RadioHomeView: View {
 
     var body: some View {
         List {
+            StationShelf(title: "Dutch radio", items: radio.dutch)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             ForEach(radio.shelves) { shelf in
                 if shelf.items.contains(where: \.isStation) {
                     StationShelf(title: shelf.title, items: shelf.items)
@@ -74,6 +77,7 @@ struct RadioHomeContent: View {
     @Environment(RadioCatalog.self) private var radio
 
     var body: some View {
+        StationShelf(title: "Dutch radio", items: radio.dutch)
         ForEach(radio.shelves) { shelf in
             if shelf.items.contains(where: \.isStation) {
                 StationShelf(title: shelf.title, items: shelf.items)
