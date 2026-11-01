@@ -47,6 +47,36 @@ struct SonosSpotifyServiceTests {
         #expect(recorded.requests.last?.bodyText.contains("<token>new</token>") == true)
     }
 
+    @Test func theLibraryComesThroughTheLinkPageByPage() async throws {
+        let service = linkedService()
+        func page(_ entries: String, total: Int) -> String {
+            """
+            <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>\
+            <ns0:getMetadataResponse xmlns:ns0="http://www.sonos.com/Services/1.1"><ns0:getMetadataResult>\
+            <ns0:index>0</ns0:index><ns0:count>1</ns0:count><ns0:total>\(total)</ns0:total>\(entries)\
+            </ns0:getMetadataResult></ns0:getMetadataResponse></s:Body></s:Envelope>
+            """
+        }
+        // As the owner's link answered for `your_songs`, one song per page here.
+        let loser = """
+            <ns0:mediaMetadata><ns0:id>spotify:track:5Xr20lO3fb2gLtDOKyF0G5</ns0:id><ns0:itemType>track</ns0:itemType>\
+            <ns0:title>Loser (Fcukers Remix)</ns0:title><ns0:trackMetadata><ns0:artist>Tame Impala</ns0:artist>\
+            <ns0:album>Loser (Fcukers Remix)</ns0:album><ns0:duration>267</ns0:duration>\
+            <ns0:albumArtURI>https://i.scdn.co/image/ab67616d0000b273c516efd7fd5ddee1f11cc8ef</ns0:albumArtURI>\
+            </ns0:trackMetadata></ns0:mediaMetadata>
+            """
+        let warrior = loser.replacingOccurrences(of: "5Xr20lO3fb2gLtDOKyF0G5", with: "7vwTsX8UY5QZmPiQUmWkaL")
+            .replacingOccurrences(of: "Loser (Fcukers Remix)</ns0:title>", with: "Warrior</ns0:title>")
+        recorded.answer((200, page(loser, total: 2))) { $0.bodyText.contains("<index>0</index>") }
+        recorded.answer((200, page(warrior, total: 2))) { $0.bodyText.contains("<index>1</index>") }
+
+        let songs = try await service.items(in: "your_songs", household: household)
+
+        #expect(songs.map(\.name) == ["Loser (Fcukers Remix)", "Warrior"])
+        #expect(songs.first?.subtitle == "Tame Impala" && songs.first?.album == "Loser (Fcukers Remix)")
+        #expect(songs.first?.imageURL?.host() == "i.scdn.co")
+    }
+
     @Test func theHomeRenewsItsKeyThroughASmallCallAfterA401() async throws {
         let service = linkedService()
         recorded.answer((401, "")) { $0.url?.path() == "/v1/browse" && $0.value(forHTTPHeaderField: "Authorization") == "Bearer old" }

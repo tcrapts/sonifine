@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Spotify as the Sonos system offers it, through the **link**: the Spotify home
 /// with Daily Mix, Release Radar and stations, and the songs of any playlist or
@@ -103,17 +104,76 @@ final class SonosSpotifyService {
         return greetings.contains(name.lowercased()) ? "Jump back in" : name
     }
 
-    /// The songs of a playlist or album.
+    /// The songs of a playlist or album, every page.
     func songs(of uri: SpotifyURI, household: Household) async throws -> [SpotifyItem] {
-        let response = try await withFreshKey(household: household) { _ in
-            try await self.call("getMetadata", "<id>\(uri)</id><index>0</index><count>100</count>",
-                                household: household, signedIn: true)
+        try await items(in: uri.description, household: household).filter(\.isTrack)
+    }
+
+    // MARK: Library
+
+    /// The user's library through the link: playlists, Liked Songs (newest first) and
+    /// saved albums. The link counts against Sonos, not the Web API's small quota.
+    func library(household: Household) async throws -> (playlists: [SpotifyItem], likedSongs: [SpotifyItem], albums: [SpotifyItem]) {
+        async let playlists = items(in: "playlists", household: household)
+        async let liked = items(in: "your_songs", household: household)
+        async let albums = items(in: "your_albums", household: household)
+        // The link gives no dates; Liked Songs come newest first, so their order stands in.
+        let now = Date.now
+        let likedSongs = try await liked.enumerated().map { index, song in
+            var song = song
+            song.addedAt = now.addingTimeInterval(-Double(index))
+            return song
         }
-        return response.descendants(named: "mediaMetadata").compactMap { song in
-            guard let uri = song.value("id").flatMap({ SpotifyURI($0) }), uri.kind == .track,
-                  let title = song.value("title") else { return nil }
-            return SpotifyItem(uri: uri, name: title, subtitle: song.value("artist") ?? "",
-                               imageURL: song.value("albumArtURI").flatMap(URL.init(string:)))
+        return try await (playlists, likedSongs, albums)
+    }
+
+    /// Songs, albums, artists and playlists that match `term`, ten of each.
+    func search(_ term: String, household: Household) async throws -> SpotifySearchResults {
+        func find(_ category: String) async throws -> [SpotifyItem] {
+            let response = try await withFreshKey(household: household) { _ in
+                try await self.call("search", "<id>\(category)</id><term>\(term.xmlEscaped)</term><index>0</index><count>10</count>",
+                                    household: household, signedIn: true)
+            }
+            return Self.items(in: response)
+        }
+        async let tracks = find("track")
+        async let artists = find("artist")
+        async let albums = find("album")
+        async let playlists = find("playlist")
+        return try await SpotifySearchResults(tracks: tracks, artists: artists, albums: albums, playlists: playlists)
+    }
+
+    /// Everything in one of the link's lists, page by page, up to `limit`.
+    func items(in id: String, household: Household, limit: Int = 2000) async throws -> [SpotifyItem] {
+        var found: [SpotifyItem] = []
+        var index = 0
+        while index < limit {
+            let response = try await withFreshKey(household: household) { _ in
+                try await self.call("getMetadata", "<id>\(id.xmlEscaped)</id><index>\(index)</index><count>100</count>",
+                                    household: household, signedIn: true)
+            }
+            let page = Self.items(in: response)
+            let entries = response.descendants(named: "mediaCollection").count + response.descendants(named: "mediaMetadata").count
+            found += page
+            index += entries
+            let total = response.value("total").flatMap(Int.init) ?? 0
+            if entries == 0 || index >= total { break }
+        }
+        return found
+    }
+
+    /// The playlists, albums, artists and songs in a getMetadata or search answer.
+    private static func items(in response: XMLNode) -> [SpotifyItem] {
+        let entries = response.descendants(named: "mediaCollection") + response.descendants(named: "mediaMetadata")
+        return entries.compactMap { entry -> SpotifyItem? in
+            guard let uri = entry.value("id").flatMap({ SpotifyURI($0) }), uri.kind != .other,
+                  let title = entry.value("title") else { return nil }
+            let artist = entry.value("artist") ?? ""
+            var item = SpotifyItem(uri: uri, name: title,
+                                   subtitle: uri.kind == .album ? "Album · \(artist)" : uri.kind == .artist ? "Artist" : artist,
+                                   imageURL: entry.value("albumArtURI").flatMap(URL.init(string:)))
+            item.album = entry.value("album")
+            return item
         }
     }
 

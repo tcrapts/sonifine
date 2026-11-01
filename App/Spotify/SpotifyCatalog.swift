@@ -35,7 +35,7 @@ final class SpotifyCatalog {
         self.household = household
         isSignedIn = webAPI.isSignedIn
         isLinked = sonosService.isLinked
-        if isSignedIn, let saved = Self.savedLibrary() {
+        if isSignedIn || isLinked, let saved = Self.savedLibrary() {
             (library, libraryAsked) = saved
         }
         webAPI.onSignedOut = { [weak self] in self?.signedOut() }
@@ -119,21 +119,47 @@ final class SpotifyCatalog {
         _ = await (library, home)
     }
 
+    /// The library comes from the link when there is one: it has no small quota. The
+    /// Web API adds what only it has, such as podcasts and recently played, when it can.
     private func loadLibrary(force: Bool) async {
-        guard isSignedIn, force || Date.now.timeIntervalSince(libraryAsked) > 6 * 60 * 60 else { return }
-        do {
-            library = try await webAPI.library()
-            libraryAsked = .now
-            Self.save(library)
-            Logger(subsystem: "com.example.sonifine", category: "Spotify").info(
-                "library: \(self.library.playlists.count) playlists, \(self.library.likedSongs.count) liked, \(self.library.shows.count) podcasts")
-            errorMessage = nil
-        } catch {
+        guard isSignedIn || isLinked, force || Date.now.timeIntervalSince(libraryAsked) > 6 * 60 * 60 else { return }
+        let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
+        var loaded = library
+        var failure: Error?
+        if isLinked {
+            // The link needs the Sonos; Home loads again once it is found.
+            guard let household = await household() else { return }
+            do {
+                (loaded.playlists, loaded.likedSongs, loaded.albums) = try await sonosService.library(household: household)
+            } catch {
+                failure = error
+            }
+        }
+        if isSignedIn {
+            do {
+                let web = try await webAPI.library()
+                loaded.shows = web.shows
+                loaded.recentlyPlayed = web.recentlyPlayed
+                loaded.jumpBackIn = web.jumpBackIn
+                if !isLinked { loaded = web }
+            } catch {
+                // Without the link the Web API is the only source; with it, the rest still stands.
+                if !isLinked || HTTP.isCancellation(error) { failure = failure ?? error }
+                else { log.error("web library: \(String(describing: error))") }
+            }
+        }
+        if let failure {
             // A load the view cancelled, such as when Home restarts its task once the
             // Sonos is found, doesn't count: the next one must still go out.
-            if !HTTP.isCancellation(error) { libraryAsked = .now }
-            report(error)
+            if !HTTP.isCancellation(failure) { libraryAsked = .now }
+            report(failure)
+            return
         }
+        library = loaded
+        libraryAsked = .now
+        Self.save(library)
+        log.info("library: \(loaded.playlists.count) playlists, \(loaded.likedSongs.count) liked, \(loaded.albums.count) albums, \(loaded.shows.count) podcasts")
+        errorMessage = nil
     }
 
     private func loadHome() async {
@@ -149,12 +175,22 @@ final class SpotifyCatalog {
 
     func search(_ query: String) async {
         let query = query.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty, isSignedIn else {
+        guard !query.isEmpty, isSignedIn || isLinked else {
             searchResults = SpotifySearchResults()
             return
         }
         do {
-            searchResults = try await webAPI.search(query)
+            if isLinked, let household = await household() {
+                // Music through the link, which has no small quota; podcasts only the Web API finds.
+                var results = try await sonosService.search(query, household: household)
+                if isSignedIn, let web = try? await webAPI.search(query) {
+                    results.shows = web.shows
+                    results.episodes = web.episodes
+                }
+                searchResults = results
+            } else {
+                searchResults = try await webAPI.search(query)
+            }
             errorMessage = nil
         } catch {
             report(error)
@@ -165,6 +201,15 @@ final class SpotifyCatalog {
     /// hides Spotify's own playlists, such as Daily Mix, which the link then gives.
     func songs(of item: SpotifyItem) async throws -> [SpotifyItem] {
         var failure: Error?
+        // The link first: it has no small quota, and it shows Spotify's own playlists too.
+        if isLinked, item.kind == .playlist || item.kind == .album, let household = await household() {
+            do {
+                let songs = try await sonosService.songs(of: item.uri, household: household)
+                if !songs.isEmpty { return songs }
+            } catch {
+                failure = error
+            }
+        }
         if isSignedIn {
             do {
                 let songs = try await webAPI.songs(of: item)
@@ -172,9 +217,6 @@ final class SpotifyCatalog {
             } catch {
                 failure = error
             }
-        }
-        if isLinked, item.kind == .playlist || item.kind == .album, let household = await household() {
-            return try await sonosService.songs(of: item.uri, household: household)
         }
         throw failure ?? AppError(isSignedIn || isLinked ? "No songs found." : "Connect Spotify first.")
     }

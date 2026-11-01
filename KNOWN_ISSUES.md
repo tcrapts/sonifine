@@ -9,9 +9,9 @@
 - **Impact:** the library, search, podcasts and the heart stop working until the
   quota resets. Sonos playback keeps working.
 - **Affected code:** `App/Spotify/SpotifyWebAPI.swift`, `App/Spotify/SpotifyCatalog.swift`.
-- **Direction:** the app keeps the last library on the iPhone, reloads it at most
-  every six hours and waits an hour after `QUOTA_EXCEEDED`. Moving the library and
-  search to Sonos's Spotify service (next issue) would leave the quota alone.
+- **Direction:** playlists, Liked Songs, albums, search and playlist songs now come
+  through Sonos's Spotify service, which has no such quota. Podcasts, recently
+  played and the heart still need the Web API; the link has no podcasts.
 
 ## P2 — Two Spotify connections
 
