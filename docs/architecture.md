@@ -62,8 +62,14 @@ song, and plays. `SpotifyURI.queueItem` builds each URI and its DIDL metadata:
 | `spotify:playlist:<id>` | `x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a<id>` |
 | `spotify:album:<id>` | `x-rincon-cpcontainer:1004206cspotify%3aalbum%3a<id>` |
 | `spotify:track:<id>` | `x-sonos-spotify:spotify%3atrack%3a<id>?sid=9&flags=8224&sn=1` |
+| `spotify:episode:<id>` | `x-sonos-spotify:spotify%3aepisode%3a<id>?sid=9&flags=8224&sn=1` |
 
 The metadata names the service as `SA_RINCON<sid × 256 + 7>_X_#Svc…-0-Token`.
+
+A podcast episode plays on its own, from where the user stopped, as
+[ADR 0006](adr/0006-play-podcast-episodes-one-by-one-from-the-web-api.md)
+explains: `PlayRequest.episode` queues it, seeks with `Seek REL_TIME` and plays.
+A show has no Sonos URI; Play on a show plays its newest episode.
 
 ## Playing Sonos Radio
 
@@ -98,7 +104,9 @@ covers ahead and beside come from no queue.
 - **Library sign-in** (`SpotifyWebAPI`). Authorization code with PKCE for
   the client ID of the owner's app on developer.spotify.com, redirect URI
   `finevolume://spotify-callback`. It reads playlists, Liked Songs, saved albums,
-  recently played, search, artists and changes Liked Songs. The Web API hides
+  followed podcasts (`/me/shows`) and their episodes (`/shows/{id}/episodes`,
+  with `resume_point` under scope `user-read-playback-position`), recently
+  played, search, artists and changes Liked Songs. The Web API hides
   Spotify's own playlists from new apps; `SpotifyCatalog.songs(of:)` then falls back to the link.
 
 Both keep their keys in the Keychain.
@@ -123,7 +131,8 @@ background the silence stops ten minutes after the Sonos pauses (`KeepAwake`).
 
 `SonifineApp` holds four tabs (Home, Library, Search, System), each a
 `NavigationStack` with the mini-player above the tab bar. Every screen opens
-through a value (`SpotifyItem`, `LibraryPage`, `RadioPage`) and `spotifyDestinations()`;
+through a value (`SpotifyItem`, `LibraryPage`, `RadioPage`) and `spotifyDestinations()`,
+which opens a podcast in `ShowView` and other Spotify items in `DetailView`;
 mixing in destination links breaks value navigation in pushed screens.
 The room settings open the same way, through a `SonosRoom`: the slider button on
 a room card on the System tab, or **Rooms** in the ⚙️ sheet.

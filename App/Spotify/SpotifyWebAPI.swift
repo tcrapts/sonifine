@@ -4,7 +4,7 @@ import Security
 
 /// The library sign-in: the Spotify Web API through the owner's app on
 /// developer.spotify.com, signed in with PKCE (no client secret). It reads the
-/// library, search and artists, and changes Liked Songs.
+/// library, search, artists and podcasts, and changes Liked Songs.
 @MainActor
 final class SpotifyWebAPI {
     static let callbackScheme = "finevolume"
@@ -12,7 +12,7 @@ final class SpotifyWebAPI {
     private static let clientID = "YOUR_SPOTIFY_CLIENT_ID"
     private static let scopes = [
         "playlist-read-private", "playlist-read-collaborative", "user-library-read",
-        "user-read-recently-played", "user-library-modify",
+        "user-read-recently-played", "user-library-modify", "user-read-playback-position",
     ]
     private static let refreshTokenKey = "spotifyRefreshToken"
 
@@ -23,6 +23,8 @@ final class SpotifyWebAPI {
     private let secrets: SecretStore
     private var accessToken: String?
     private var accessTokenExpiry = Date.distantPast
+    /// The permissions of the sign-in, as the last token named them.
+    private var grantedScopes: Set<String>?
     /// The refresh in progress. Requests that need a token meanwhile wait for it.
     private var refresh: Task<String, Error>?
 
@@ -35,6 +37,10 @@ final class SpotifyWebAPI {
     }
 
     var isSignedIn: Bool { secrets.read(Self.refreshTokenKey) != nil }
+
+    /// False when the sign-in predates the permission to read where the user
+    /// stopped in an episode; true when it has it or no token has said yet.
+    var canReadPlaybackPosition: Bool { grantedScopes?.contains("user-read-playback-position") ?? true }
 
     // MARK: Sign-in
 
@@ -102,6 +108,7 @@ final class SpotifyWebAPI {
         }
         accessToken = token.access_token
         accessTokenExpiry = Date.now.addingTimeInterval(TimeInterval(token.expires_in - 60))
+        grantedScopes = token.scope.map { Set($0.split(separator: " ").map(String.init)) }
         if let refreshToken = token.refresh_token, !secrets.save(refreshToken, for: Self.refreshTokenKey) {
             throw AppError("Couldn't keep the Spotify sign-in on this iPhone.")
         }
@@ -114,6 +121,8 @@ final class SpotifyWebAPI {
         var playlists: [SpotifyItem] = []
         var likedSongs: [SpotifyItem] = []
         var albums: [SpotifyItem] = []
+        /// The podcasts the user follows, most recently followed first.
+        var shows: [SpotifyItem] = []
         /// Songs played recently, newest first, each once.
         var recentlyPlayed: [SpotifyItem] = []
         /// The playlists and albums those songs were played from, newest first.
@@ -125,11 +134,14 @@ final class SpotifyWebAPI {
         async let liked = likedSongs()
         async let albumPage: Page<SavedAlbum> = get("/me/albums?limit=50")
         async let recentPage: Page<PlayHistory> = get("/me/player/recently-played?limit=50")
+        async let savedShows: [SavedShow?] = all("/me/shows?limit=50")
 
         var library = Library()
         library.playlists = try await playlistPage.items.compactMap { $0?.item }
         library.likedSongs = try await liked
         library.albums = try await albumPage.items.compactMap { $0?.album.item }
+        // The library loads without its podcasts when Spotify refuses them.
+        library.shows = ((try? await savedShows) ?? []).compactMap { $0?.show.item }
         let history = try await recentPage.items.compactMap { $0 }
         var seen = Set<SpotifyURI>()
         library.recentlyPlayed = history.compactMap(\.track.item).filter { seen.insert($0.uri).inserted }
@@ -168,12 +180,27 @@ final class SpotifyWebAPI {
     // MARK: Search and contents
 
     func search(_ query: String) async throws -> SpotifySearchResults {
-        let result: SearchResponse = try await get("/search?q=\(Self.encode(query))&type=track,artist,album,playlist&limit=10")
+        let result: SearchResponse = try await get(
+            "/search?q=\(Self.encode(query))&type=track,artist,album,playlist,show,episode&limit=10")
         return SpotifySearchResults(
             tracks: result.tracks?.items.compactMap { $0?.item } ?? [],
             artists: result.artists?.items.compactMap { $0?.item } ?? [],
             albums: result.albums?.items.compactMap { $0?.item } ?? [],
-            playlists: result.playlists?.items.compactMap { $0?.item } ?? [])
+            playlists: result.playlists?.items.compactMap { $0?.item } ?? [],
+            shows: result.shows?.items.compactMap { $0?.item } ?? [],
+            episodes: result.episodes?.items.compactMap { $0?.item } ?? [])
+    }
+
+    /// The episodes of a podcast, newest first: the latest hundred.
+    func episodes(of show: SpotifyItem) async throws -> [SpotifyItem] {
+        let episodes: [Episode?] = try await all("/shows/\(show.uri.id)/episodes?limit=50", limit: 100)
+        return episodes.compactMap { $0?.item(showImage: show.imageURL) }
+    }
+
+    /// The podcast an episode belongs to.
+    func show(of episode: SpotifyURI) async throws -> SpotifyItem? {
+        let details: Episode = try await get("/episodes/\(episode.id)")
+        return details.show?.item
     }
 
     /// The songs of a playlist or album, or an artist's best known songs.
@@ -197,7 +224,7 @@ final class SpotifyWebAPI {
             return result.tracks?.items.compactMap { $0?.item } ?? []
         case .track:
             return [item]
-        case .other:
+        case .show, .episode, .other:
             return []
         }
     }
@@ -275,6 +302,8 @@ private struct TokenResponse: Decodable {
     let access_token: String
     let expires_in: Int
     let refresh_token: String?
+    /// The permissions, separated by spaces.
+    let scope: String?
 }
 
 private struct APIError: Decodable {
@@ -374,6 +403,70 @@ private extension SpotifyItem {
 
 private struct SavedAlbum: Decodable { let album: Album }
 
+private struct Show: Decodable {
+    let uri: String, name: String
+    let images: [SpotifyImage]?
+    /// Spotify no longer gives the publisher to apps in development mode.
+    let publisher: String?
+
+    var item: SpotifyItem? {
+        guard let uri = SpotifyURI(uri), uri.kind == .show else { return nil }
+        let by = publisher.flatMap { $0.isEmpty ? nil : " · " + $0 } ?? ""
+        return SpotifyItem(uri: uri, name: name, subtitle: "Podcast" + by, imageURL: images?.firstURL)
+    }
+}
+
+private struct SavedShow: Decodable { let show: Show }
+
+/// A podcast episode. Its show comes along in search results and on its own page,
+/// not in the list of a show's episodes.
+private struct Episode: Decodable {
+    struct ResumePoint: Decodable {
+        let fully_played: Bool
+        let resume_position_ms: Int
+    }
+
+    let uri: String, name: String
+    let images: [SpotifyImage]?
+    let duration_ms: Int
+    /// `2026-10-30`, or only the year or month, as `release_date_precision` says.
+    let release_date: String?
+    /// Only with the permission `user-read-playback-position`.
+    let resume_point: ResumePoint?
+    let show: Show?
+
+    var item: SpotifyItem? { item(showImage: nil) }
+
+    func item(showImage: URL?) -> SpotifyItem? {
+        guard let uri = SpotifyURI(uri), uri.kind == .episode else { return nil }
+        let details = SpotifyItem.Episode(
+            released: release_date.flatMap { try? Date($0 + "T12:00:00Z", strategy: .iso8601) },
+            duration: TimeInterval(duration_ms) / 1000,
+            resumePosition: resume_point.map { TimeInterval($0.resume_position_ms) / 1000 },
+            fullyPlayed: resume_point?.fully_played ?? false)
+        var item = SpotifyItem(uri: uri, name: name, subtitle: details.summary(show: show?.name),
+                               imageURL: images?.firstURL ?? show?.images?.firstURL ?? showImage)
+        item.episode = details
+        return item
+    }
+}
+
+extension SpotifyItem.Episode {
+    /// The line below an episode's title, such as `Podcast · 30 Oct 2026 · 45 min left`.
+    func summary(show: String? = nil) -> String {
+        let length = fullyPlayed ? "Played"
+            : progress != nil ? Self.minutes(duration - (resumePosition ?? 0)) + " left"
+            : Self.minutes(duration)
+        return [show, released?.formatted(date: .abbreviated, time: .omitted), length]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// `45 min` or `1 hr 5 min`.
+    private static func minutes(_ seconds: TimeInterval) -> String {
+        Duration.seconds(max(60, seconds)).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+    }
+}
+
 private struct PlayHistory: Decodable {
     struct Context: Decodable { let uri: String }
     let track: Track
@@ -400,6 +493,8 @@ private struct SearchResponse: Decodable {
     let artists: Page<Artist>?
     let albums: Page<Album>?
     let playlists: Page<Playlist>?
+    let shows: Page<Show>?
+    let episodes: Page<Episode>?
 }
 
 private extension Data {

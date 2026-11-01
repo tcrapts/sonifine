@@ -163,4 +163,75 @@ struct SpotifyWebAPITests {
                 "choosing it again puts the oldest first")
         #expect(newestFirst.choosing(.title).apply(to: songs).map(\.name) == ["Clocks", "Shiver", "Yellow"])
     }
+
+    // MARK: Podcasts (shapes from Spotify's Web API reference)
+
+    private let show = SpotifyItem(uri: SpotifyURI("spotify:show:38bS44xjbVVZ3No3ByF1dJ")!, name: "TalkRL",
+                                   subtitle: "Podcast", imageURL: URL(string: "https://i.scdn.co/image/show"))
+
+    @Test func aShowGivesItsEpisodesWithWhereTheUserStopped() async throws {
+        let api = api()
+        recorded.answer((200, token.replacingOccurrences(of: "}", with: #","scope":"user-library-read user-read-playback-position"}"#)),
+                        when: isTokenRequest)
+        recorded.answer((200, """
+            {"items":[{"uri":"spotify:episode:0FuKEjteM0cGzy7pznCkAj","name":"Ian Osband","duration_ms":3600000,            "release_date":"2024-03-11","release_date_precision":"day","images":[],            "resume_point":{"fully_played":false,"resume_position_ms":1200000}},            {"uri":"spotify:episode:B","name":"Older","duration_ms":1686230,"release_date":"2019",            "release_date_precision":"year","images":[{"url":"https://i.scdn.co/image/b"}],            "resume_point":{"fully_played":true,"resume_position_ms":0}},null],"next":null}
+            """)) { $0.url?.path() == "/v1/shows/38bS44xjbVVZ3No3ByF1dJ/episodes" }
+
+        let episodes = try await api.episodes(of: show)
+
+        #expect(episodes.map(\.name) == ["Ian Osband", "Older"])
+        #expect(episodes[0].episode?.startPosition == 1200)
+        #expect(episodes[0].episode?.progress == 1.0 / 3)
+        #expect(episodes[0].imageURL == show.imageURL, "an episode without a cover shows the podcast's")
+        #expect(episodes[0].subtitle.hasSuffix("40 min left"))
+        #expect(episodes[1].episode?.startPosition == 0 && episodes[1].subtitle == "Played")
+        #expect(api.canReadPlaybackPosition)
+    }
+
+    @Test func anOlderSignInSaysItCantReadWhereEpisodesStopped() async throws {
+        let api = api()
+        recorded.answer((200, token.replacingOccurrences(of: "}", with: #","scope":"user-library-read"}"#)), when: isTokenRequest)
+        recorded.answer((200, #"{"items":[{"uri":"spotify:episode:E","name":"New","duration_ms":60000}]}"#)) {
+            $0.url?.path().hasSuffix("/episodes") == true
+        }
+
+        let episodes = try await api.episodes(of: show)
+
+        #expect(episodes.first?.episode?.progress == nil)
+        #expect(!api.canReadPlaybackPosition)
+    }
+
+    @Test func theLibraryHasTheFollowedPodcastsAndLoadsWithoutThem() async throws {
+        let api = api()
+        recorded.answer((200, token), when: isTokenRequest)
+        for path in ["/v1/me/playlists", "/v1/me/tracks", "/v1/me/albums", "/v1/me/player/recently-played"] {
+            recorded.answer((200, #"{"items":[]}"#)) { $0.url?.path() == path }
+            recorded.answer((200, #"{"items":[]}"#)) { $0.url?.path() == path }
+        }
+        recorded.answer((200, """
+            {"items":[{"added_at":"2026-10-01T08:00:00Z","show":{"uri":"spotify:show:S","name":"TalkRL",            "images":[{"url":"https://i.scdn.co/image/s"}],"total_episodes":12}}],"next":null}
+            """)) { $0.url?.path() == "/v1/me/shows" }
+        recorded.answer((403, #"{"error":{"message":"Forbidden"}}"#)) { $0.url?.path() == "/v1/me/shows" }
+
+        let library = try await api.library()
+        let withoutPodcasts = try await api.library()
+
+        #expect(library.shows.map(\.name) == ["TalkRL"])
+        #expect(library.shows.first?.opens == true)
+        #expect(withoutPodcasts.shows.isEmpty)
+    }
+
+    @Test func searchFindsPodcastsAndEpisodesApartFromSongs() async throws {
+        let api = api()
+        recorded.answer((200, token), when: isTokenRequest)
+        recorded.answer((200, """
+            {"tracks":{"items":[{"uri":"spotify:track:A","name":"Yellow","artists":[]}]},            "shows":{"items":[{"uri":"spotify:show:S","name":"TalkRL","publisher":"Robin"}]},            "episodes":{"items":[null,{"uri":"spotify:episode:E","name":"Ian Osband","duration_ms":600000,            "release_date":"2024-03-11"}]}}
+            """)) { $0.url?.query()?.contains("type=track,artist,album,playlist,show,episode") == true }
+
+        let results = try await api.search("talkrl")
+
+        #expect(results.tracks.map(\.name) == ["Yellow"])
+        #expect(results.shows.map(\.subtitle) == ["Podcast · Robin"])
+        #expect(results.episodes.map(\.uri.kind) == [.episode])
+    }
 }

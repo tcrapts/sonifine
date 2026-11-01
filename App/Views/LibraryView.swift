@@ -3,10 +3,10 @@ import SwiftUI
 /// A page of the library. Every screen opens through a value, so one navigation
 /// stack can push them all in any order.
 enum LibraryPage: Hashable {
-    case playlists, likedSongs, albums
+    case playlists, likedSongs, albums, podcasts
 }
 
-/// The library: playlists, Liked Songs and saved albums.
+/// The library: playlists, Liked Songs, saved albums and the podcasts the user follows.
 struct LibraryView: View {
     @Environment(SpotifyCatalog.self) private var catalog
 
@@ -17,6 +17,7 @@ struct LibraryView: View {
                     link("Playlists", systemImage: "music.note.list", count: catalog.library.playlists.count, page: .playlists)
                     link("Liked Songs", systemImage: "heart.fill", count: catalog.library.likedSongs.count, page: .likedSongs)
                     link("Albums", systemImage: "square.stack.fill", count: catalog.library.albums.count, page: .albums)
+                    link("Podcasts", systemImage: "mic.fill", count: catalog.library.shows.count, page: .podcasts)
                 }
                 .refreshable { await catalog.reload() }
             } else {
@@ -41,7 +42,7 @@ struct LibraryView: View {
     }
 }
 
-/// The playlists, Liked Songs or albums of the library.
+/// The playlists, Liked Songs, albums or podcasts of the library.
 struct LibraryPageView: View {
     let page: LibraryPage
     @Environment(SpotifyCatalog.self) private var catalog
@@ -52,6 +53,7 @@ struct LibraryPageView: View {
         switch page {
         case .playlists: list("Playlists", library.playlists)
         case .albums: list("Albums", library.albums)
+        case .podcasts: list("Podcasts", library.shows)
         case .likedSongs: LikedSongsView()
         }
     }

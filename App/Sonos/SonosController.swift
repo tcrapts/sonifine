@@ -338,7 +338,8 @@ final class SonosController {
         switch request {
         case .songs(let songs, _, let random): (uris, shuffle) = (songs, random)
         case .collection(let collection, _, let random): (uris, shuffle) = ([collection], random)
-        case .artist: return // The catalog turns an artist into songs first.
+        case .episode(let episode, _): (uris, shuffle) = ([episode], false)
+        case .artist, .show: return // The catalog turns an artist into songs, a show into an episode, first.
         case .station(let station): return await play(station, on: group)
         }
         let items = uris.compactMap { $0.queueItem(account: account) }
@@ -362,7 +363,7 @@ final class SonosController {
             if !shuffle, let number = try await startNumber(of: request, in: player) {
                 try await player.seek(toTrack: number)
             }
-            try await player.play()
+            try await play(player, from: request)
             statuses[group.id]?.isPlaying = true
             actionError = nil
         } catch {
@@ -376,6 +377,15 @@ final class SonosController {
         await refresh([group])
     }
 
+    /// Plays the queue; an episode first goes to where the user stopped listening.
+    /// Sonos may refuse to seek before the episode is loaded, so it seeks again once it plays.
+    private func play(_ player: SonosPlayer, from request: PlayRequest) async throws {
+        guard case .episode(_, let position) = request, position > 0 else { return try await player.play() }
+        let sought = (try? await player.seek(to: position)) != nil
+        try await player.play()
+        if !sought { try? await player.seek(to: position) }
+    }
+
     /// The song to begin with, counted from 1 in the queue, or nil for the first.
     /// A song inside a playlist is found in the queue Sonos built, because the
     /// Web API leaves out podcasts and local files that Sonos keeps.
@@ -385,7 +395,7 @@ final class SonosController {
             return start > 0 ? start + 1 : nil
         case .collection(_, let start?, _):
             return try await player.queue().first { $0.spotifyTrack == start }.map { $0.id + 1 }
-        case .collection, .artist, .station:
+        case .collection, .artist, .episode, .show, .station:
             return nil
         }
     }

@@ -30,8 +30,8 @@ extension EnvironmentValues {
 }
 
 extension SpotifyItem {
-    /// Songs, albums and playlists can join the queue.
-    var queues: Bool { kind == .track || kind == .album || kind == .playlist }
+    /// Songs, episodes, albums and playlists can join the queue.
+    var queues: Bool { kind == .track || kind == .episode || kind == .album || kind == .playlist }
 }
 
 /// The Play Next and Add to Queue buttons, for swipe actions and context menus.
@@ -77,9 +77,11 @@ private struct QueueButtonsSingle: View {
 }
 
 extension View {
-    /// Opens playlists, albums and artists, the pages of the library and those of Sonos Radio.
+    /// Opens playlists, albums, artists and podcasts, the pages of the library and those of Sonos Radio.
     func spotifyDestinations() -> some View {
-        navigationDestination(for: SpotifyItem.self) { DetailView(item: $0) }
+        navigationDestination(for: SpotifyItem.self) { item in
+            if item.kind == .show { ShowView(show: item) } else { DetailView(item: item) }
+        }
             .navigationDestination(for: LibraryPage.self) { LibraryPageView(page: $0) }
             .navigationDestination(for: RadioPage.self) { RadioPageView(page: $0) }
     }
@@ -178,8 +180,10 @@ struct ItemRow: View {
     let onPlay: () -> Void
     @Environment(SonosController.self) private var sonos
 
-    /// The song the selected room plays now: green, with a sound icon, as in Spotify.
-    private var isCurrent: Bool { item.isTrack && sonos.selectedStatus.spotifyTrack == item.uri }
+    /// The song or episode the selected room plays now: green, with a sound icon, as in Spotify.
+    private var isCurrent: Bool {
+        (item.isTrack || item.kind == .episode) && sonos.selectedStatus.spotifyTrack == item.uri
+    }
 
     var body: some View {
         Group {
@@ -216,10 +220,15 @@ struct ItemRow: View {
                             .font(.caption.bold())
                             .accessibilityLabel(sonos.selectedStatus.isPlaying ? "Playing" : "Paused")
                     }
-                    Text(item.name).lineLimit(1)
+                    // An episode's title is often long; it gets a second line.
+                    Text(item.name).lineLimit(item.episode == nil ? 1 : 2).multilineTextAlignment(.leading)
                 }
                 .foregroundStyle(isCurrent ? Color.accent : .primary)
                 Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let progress = item.episode?.progress, progress < 1 {
+                    ProgressView(value: progress).tint(Color.accent).frame(maxWidth: 120)
+                        .accessibilityLabel("Listened")
+                }
             }
             Spacer(minLength: 0)
         }

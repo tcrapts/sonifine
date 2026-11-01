@@ -52,7 +52,7 @@ struct NowPlayingView: View {
         }
         .task(id: status.spotifyTrack) {
             isLiked = nil
-            guard let track = status.spotifyTrack else { return }
+            guard let track = status.spotifyTrack, track.kind == .track else { return }
             isLiked = await catalog.isLiked(track)
         }
     }
@@ -69,8 +69,12 @@ struct NowPlayingView: View {
             Spacer()
             if let track = status.spotifyTrack, catalog.isSignedIn {
                 Menu {
-                    Button("Go to album", systemImage: "square.stack") { open(track, \.album) }
-                    Button("Go to artist", systemImage: "music.mic") { open(track, \.artist) }
+                    if track.kind == .episode {
+                        Button("Go to podcast", systemImage: "mic") { openShow(of: track) }
+                    } else {
+                        Button("Go to album", systemImage: "square.stack") { open(track, \.album) }
+                        Button("Go to artist", systemImage: "music.mic") { open(track, \.artist) }
+                    }
                 } label: {
                     Image(systemName: "ellipsis").frame(width: 44, height: 44)
                 }
@@ -92,7 +96,7 @@ struct NowPlayingView: View {
                     .foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
-            if let track = status.spotifyTrack, catalog.isSignedIn {
+            if let track = status.spotifyTrack, track.kind == .track, catalog.isSignedIn {
                 Button { toggleLike(track) } label: {
                     Image(systemName: isLiked == true ? "heart.fill" : "heart")
                         .foregroundStyle(isLiked == true ? Color.accent : .primary)
@@ -174,6 +178,12 @@ struct NowPlayingView: View {
         let liked = !(isLiked ?? false)
         isLiked = liked
         Task { if await !catalog.setLiked(liked, track) { isLiked = !liked } }
+    }
+
+    private func openShow(of episode: SpotifyURI) {
+        Task {
+            if let show = await catalog.show(of: episode) { path.append(show) }
+        }
     }
 
     private func open(_ track: SpotifyURI, _ part: KeyPath<(album: SpotifyItem?, artist: SpotifyItem?), SpotifyItem?>) {

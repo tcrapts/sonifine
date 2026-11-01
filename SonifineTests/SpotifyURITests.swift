@@ -33,6 +33,19 @@ struct SpotifyURITests {
         #expect(XMLNode.parse(playlist.metadata)?.value("class") == "object.container.playlistContainer")
     }
 
+    /// The speaker's cover-art lookup (`/getaa?s=1&u=…`) resolved this episode URI through
+    /// the owner's Spotify account and returned its cover, and a made-up ID with a 404.
+    @Test func encodesAPodcastEpisodeAsATrackOfTheAccount() throws {
+        let episode = try #require(SpotifyURI("spotify:episode:0FuKEjteM0cGzy7pznCkAj"))
+        let item = try #require(episode.queueItem(account: .default))
+
+        #expect(episode.kind == .episode)
+        #expect(item.uri == "x-sonos-spotify:spotify%3aepisode%3a0FuKEjteM0cGzy7pznCkAj?sid=9&flags=8224&sn=1")
+        #expect(XMLNode.parse(item.metadata)?.descendants(named: "item").first?.attributes["id"]
+            == "00032020spotify%3aepisode%3a0FuKEjteM0cGzy7pznCkAj")
+        #expect(SpotifyURI(sonosTrackURI: item.uri) == episode, "Now Playing knows the episode")
+    }
+
     @Test func leavesWhatSonosCantQueue() {
         #expect(SpotifyURI("spotify:artist:4gzpq5DPGxSnKTe4SA8HAU")?.queueItem(account: .default) == nil)
         #expect(SpotifyURI("spotify:show:abc")?.queueItem(account: .default) == nil)
@@ -64,6 +77,25 @@ struct PlayRequestTests {
     @Test func aLoneSongPlaysAlone() {
         let lone = song("A")
         #expect(PlayRequest.tap(lone) == .songs([lone.uri], start: 0, shuffle: false))
+    }
+
+    @Test func anEpisodeResumesWhereTheUserStopped() {
+        func episode(at position: TimeInterval?, fullyPlayed: Bool = false) -> SpotifyItem {
+            var item = SpotifyItem(uri: SpotifyURI("spotify:episode:E")!, name: "Episode", subtitle: "", imageURL: nil)
+            item.episode = .init(duration: 3600, resumePosition: position, fullyPlayed: fullyPlayed)
+            return item
+        }
+        #expect(PlayRequest.tap(episode(at: 1200)) == .episode(SpotifyURI("spotify:episode:E")!, from: 1200))
+        #expect(PlayRequest.tap(episode(at: nil)) == .episode(SpotifyURI("spotify:episode:E")!, from: 0))
+        #expect(PlayRequest.tap(episode(at: 3590)) == .episode(SpotifyURI("spotify:episode:E")!, from: 0),
+                "the last seconds start again")
+        #expect(PlayRequest.tap(episode(at: 1200, fullyPlayed: true)) == .episode(SpotifyURI("spotify:episode:E")!, from: 0))
+    }
+
+    @Test func aSongPlaysWithTheSongsOfItsListButNotTheEpisodes() {
+        let episode = SpotifyItem(uri: SpotifyURI("spotify:episode:E")!, name: "Episode", subtitle: "", imageURL: nil)
+        let list = [song("A"), episode, song("B")]
+        #expect(PlayRequest.tap(list[2], in: list) == .songs([list[0].uri, list[2].uri], start: 1, shuffle: false))
     }
 
     @Test func aStationIsNothingSonosCanPlay() {

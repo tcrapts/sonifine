@@ -1,6 +1,6 @@
 import Foundation
 
-/// Something from Spotify: a playlist, album, song or artist.
+/// Something from Spotify: a playlist, album, song, artist, podcast or episode.
 struct SpotifyItem: Identifiable, Hashable {
     let uri: SpotifyURI
     let name: String
@@ -10,12 +10,38 @@ struct SpotifyItem: Identifiable, Hashable {
     var album: String? = nil
     /// When the song was added to the playlist or to Liked Songs it was loaded from.
     var addedAt: Date? = nil
+    /// The release, length and progress of a podcast episode.
+    var episode: Episode? = nil
 
     var id: String { uri.description }
     var kind: SpotifyURI.Kind { uri.kind }
     var isTrack: Bool { kind == .track }
-    /// Playlists, albums and artists open on a page of their own.
-    var opens: Bool { kind == .playlist || kind == .album || kind == .artist }
+    /// Playlists, albums, artists and podcasts open on a page of their own.
+    var opens: Bool { kind == .playlist || kind == .album || kind == .artist || kind == .show }
+
+    /// A podcast episode, as the Web API describes it.
+    struct Episode: Hashable {
+        var released: Date?
+        var duration: TimeInterval
+        /// Where the user stopped listening, in seconds. Spotify only tells with the
+        /// permission `user-read-playback-position`.
+        var resumePosition: TimeInterval?
+        var fullyPlayed = false
+
+        /// How far the user listened, 0…1, or nil when they haven't started.
+        var progress: Double? {
+            if fullyPlayed { return 1 }
+            guard let resumePosition, resumePosition > 0, duration > 0 else { return nil }
+            return min(1, resumePosition / duration)
+        }
+
+        /// Where playback begins: where the user stopped, or at the start for an
+        /// episode played to the end or nearly so.
+        var startPosition: TimeInterval {
+            guard !fullyPlayed, let resumePosition, resumePosition < duration - 30 else { return 0 }
+            return resumePosition
+        }
+    }
 }
 
 /// A titled row of the Spotify home, such as "Jump back in" or "Your top mixes".
@@ -31,6 +57,8 @@ struct SpotifySearchResults: Equatable {
     var artists: [SpotifyItem] = []
     var albums: [SpotifyItem] = []
     var playlists: [SpotifyItem] = []
+    var shows: [SpotifyItem] = []
+    var episodes: [SpotifyItem] = []
 }
 
 /// What a tap asks Sonos to play.
@@ -41,6 +69,10 @@ enum PlayRequest: Equatable {
     case collection(SpotifyURI, start: SpotifyURI?, shuffle: Bool)
     /// An artist's best known songs; the catalog looks them up first.
     case artist(SpotifyItem, shuffle: Bool)
+    /// A podcast episode, from `position` seconds in. It plays on its own.
+    case episode(SpotifyURI, from: TimeInterval)
+    /// A podcast's newest episode; the catalog looks it up first.
+    case show(SpotifyItem)
     /// A Sonos Radio station, which plays instead of the queue.
     case station(RadioItem)
 
@@ -50,7 +82,7 @@ enum PlayRequest: Equatable {
     ///   - list: The songs shown with it. A song plays with the songs of its list.
     ///   - collection: The playlist or album the list belongs to. A song then
     ///     plays inside it, so the rest of the playlist follows.
-    /// - Returns: nil for items Sonos can't play, such as a station or a podcast.
+    /// - Returns: nil for items Sonos can't play, such as a Spotify station.
     static func tap(_ item: SpotifyItem, in list: [SpotifyItem] = [], collection: SpotifyItem? = nil,
                     shuffle: Bool = false) -> PlayRequest? {
         switch item.kind {
@@ -67,6 +99,10 @@ enum PlayRequest: Equatable {
             return .collection(item.uri, start: nil, shuffle: shuffle)
         case .artist:
             return .artist(item, shuffle: shuffle)
+        case .episode:
+            return .episode(item.uri, from: item.episode?.startPosition ?? 0)
+        case .show:
+            return .show(item)
         case .other:
             return nil
         }

@@ -8,7 +8,8 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
 
 - **Home** shows your Spotify home page: Jump back in, Daily Mix, Release Radar,
   Your top mixes, radio stations and more. The ▶ on a cover plays it at once.
-- **Library** shows your playlists, all your Liked Songs and your albums. With ↑↓
+- **Library** shows your playlists, all your Liked Songs, your albums and the
+  podcasts you follow. With ↑↓
   at the top right you sort Liked Songs and playlists by title, artist, album or
   **Recently added**; choose the same key again for the other direction. Play and
   Shuffle follow that order.
@@ -16,8 +17,11 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
   Dutch radio first (NPO, Qmusic, 538, Sky Radio and more), then its rows of
   stations, then Music, News & Talk, Sports and Locations to browse.
   The ▶ on a station plays it on the selected room instead of the queue.
-- **Search** searches all of Spotify for songs, artists, albums and playlists,
-  and Sonos Radio for stations (the **Radio** filter).
+- **Search** searches all of Spotify for songs, artists, albums, playlists and
+  podcasts (the **Podcasts** filter shows shows and episodes), and Sonos Radio
+  for stations (the **Radio** filter).
+- A podcast shows its episodes, newest first, with date, length and how far you
+  listened. Tap an episode to play it on the Sonos from where you stopped.
 - Each song has a ⋯ menu with **Play Next** and **Add to Queue**. Swipe right on a
   song, album or playlist for Play Next, left for Add to Queue; on a cover, touch
   and hold. The song that plays shows in green.

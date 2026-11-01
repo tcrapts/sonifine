@@ -63,6 +63,28 @@ struct SonosControllerTests {
         #expect(fake.plays == 1)
     }
 
+    @Test func anEpisodePlaysAloneFromWhereTheUserStopped() async throws {
+        let controller = await controller()
+        let episode = SpotifyURI("spotify:episode:0FuKEjteM0cGzy7pznCkAj")!
+
+        await controller.play(.episode(episode, from: 1200))
+
+        #expect(fake.queuedItems.map(\.uri) == ["x-sonos-spotify:spotify%3aepisode%3a0FuKEjteM0cGzy7pznCkAj?sid=9&flags=8224&sn=1"])
+        let seek = try #require(fake.positionSeeks.first)
+        #expect(seek.seconds == 1200 && seek.afterPlays == 0, "it starts at the place, not at 0:00")
+        #expect(fake.plays == 1)
+    }
+
+    @Test func anEpisodeSeeksOnceItPlaysWhenTheSpeakerRefusedBefore() async {
+        let controller = await controller()
+        fake.refusesSeekBeforePlay = true
+
+        await controller.play(.episode(SpotifyURI("spotify:episode:E")!, from: 600))
+
+        #expect(fake.positionSeeks.map(\.seconds) == [600])
+        #expect(fake.plays == 1 && controller.errorMessage == nil)
+    }
+
     @Test func theCoversToLoadAheadAreThoseOfTheNextThreeSongs() async {
         let controller = await controller()
         fake.queueEntries = (0..<6).map { index in
@@ -87,7 +109,7 @@ struct SonosControllerTests {
 
     @Test func somethingSonosCantPlayLeavesTheQueueAlone() async {
         let controller = await controller()
-        await controller.play(.songs([SpotifyURI("spotify:episode:E")!], start: 0, shuffle: false))
+        await controller.play(.songs([SpotifyURI("spotify:show:S")!], start: 0, shuffle: false))
 
         #expect(fake.queuedItems.isEmpty)
         #expect(controller.errorMessage == "Sonos can't play this.")

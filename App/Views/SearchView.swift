@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Searches all of Spotify and the stations of Sonos Radio, with a filter per kind.
+/// Searches all of Spotify, podcasts included, and the stations of Sonos Radio, with a filter per kind.
 struct SearchView: View {
     private enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", songs = "Songs", artists = "Artists", albums = "Albums", playlists = "Playlists", radio = "Radio"
+        case all = "All", songs = "Songs", artists = "Artists", albums = "Albums", playlists = "Playlists",
+             podcasts = "Podcasts", radio = "Radio"
         var id: Self { self }
     }
 
@@ -40,6 +41,7 @@ struct SearchView: View {
                 shelf("Artists", results.artists)
                 shelf("Albums", results.albums)
                 shelf("Playlists", results.playlists)
+                shelf("Podcasts", results.shows)
                 if !radio.searchResults.isEmpty {
                     StationShelf(title: "Radio", items: radio.searchResults)
                         .listRowBackground(Color.clear)
@@ -49,6 +51,9 @@ struct SearchView: View {
             case .artists: rows("Artists", results.artists)
             case .albums: rows("Albums", results.albums)
             case .playlists: rows("Playlists", results.playlists)
+            case .podcasts:
+                rows("Podcasts", results.shows)
+                rows("Episodes", results.episodes)
             case .radio:
                 if !radio.searchResults.isEmpty {
                     Section("Radio") { ForEach(radio.searchResults) { RadioRow(item: $0) } }
@@ -62,7 +67,7 @@ struct SearchView: View {
             if query.isEmpty {
                 if catalog.isSignedIn {
                     ContentUnavailableView("Search Spotify and radio", systemImage: "magnifyingglass",
-                                           description: Text("Songs, artists, albums, playlists and stations"))
+                                           description: Text("Songs, artists, albums, playlists, podcasts and stations"))
                 } else {
                     ScrollView { SpotifySignIn().padding() }
                 }

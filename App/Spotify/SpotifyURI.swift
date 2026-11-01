@@ -6,7 +6,9 @@ import Foundation
 struct SpotifyURI: Hashable, CustomStringConvertible {
     enum Kind: String {
         case playlist, album, track, artist
-        /// Anything else Spotify offers, such as a station, show or episode.
+        /// A podcast, and one of its episodes.
+        case show, episode
+        /// Anything else Spotify offers, such as a station.
         case other
     }
 
@@ -24,13 +26,17 @@ struct SpotifyURI: Hashable, CustomStringConvertible {
         description = string
     }
 
-    /// The song in a Sonos track URI, such as
+    /// The song or podcast episode in a Sonos track URI, such as
     /// `x-sonos-spotify:spotify%3atrack%3a3AJwUDP919kvQ9QcozQPxg?sid=9&flags=8224&sn=1`.
     init?(sonosTrackURI: String) {
         let decoded = sonosTrackURI.removingPercentEncoding ?? sonosTrackURI
-        guard let start = decoded.range(of: "spotify:track:") else { return nil }
-        let id = decoded[start.upperBound...].prefix { $0.isLetter || $0.isNumber }
-        self.init("spotify:track:" + id)
+        for prefix in ["spotify:track:", "spotify:episode:"] {
+            guard let start = decoded.range(of: prefix) else { continue }
+            let id = decoded[start.upperBound...].prefix { $0.isLetter || $0.isNumber }
+            self.init(prefix + id)
+            return
+        }
+        return nil
     }
 
     /// How a Sonos player queues this item from its Spotify account, or nil for
@@ -53,7 +59,12 @@ struct SpotifyURI: Hashable, CustomStringConvertible {
             itemID = "10032020" + encoded
             upnpClass = "object.item.audioItem.musicTrack"
             uri = "x-sonos-spotify:\(encoded)?sid=\(account.serviceID)&flags=8224&sn=\(account.accountNumber)"
-        case .artist, .other:
+        case .episode:
+            // As SoCo queues an episode; the speaker resolves this URI through the account.
+            itemID = "00032020" + encoded
+            upnpClass = "object.item.audioItem.musicTrack"
+            uri = "x-sonos-spotify:\(encoded)?sid=\(account.serviceID)&flags=8224&sn=\(account.accountNumber)"
+        case .artist, .show, .other:
             return nil
         }
         return SonosQueueItem(uri: uri, itemID: itemID, upnpClass: upnpClass, serviceType: account.serviceType)

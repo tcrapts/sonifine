@@ -63,6 +63,14 @@ stored in the Keychain.
 The connection between the app and the Spotify Web API, through the owner's app on
 developer.spotify.com. It gives the library, search, artists and Liked Songs.
 
+**Show** (podcast):
+A Spotify podcast, `spotify:show:<id>`. The library lists the shows the user
+follows. A show has no place in the Sonos queue; its episodes do.
+
+**Episode**:
+One part of a show, `spotify:episode:<id>`. It plays on its own, from its
+**resume position**: where the user stopped, as Spotify reports it.
+
 **Spotify account on Sonos**:
 The Spotify account that is added in the Sonos app. Playback always uses it, as
 service `sid=9` with account `sn=1`, read from the track URIs Sonos plays.

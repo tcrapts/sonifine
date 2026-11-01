@@ -11,6 +11,8 @@ final class SpotifyCatalog {
     private(set) var isSignedIn: Bool
     /// False when the sign-in predates the permission to change Liked Songs.
     private(set) var canLike = true
+    /// False when the sign-in predates the permission to read where an episode stopped.
+    private(set) var canResume = true
     private(set) var library = SpotifyWebAPI.Library()
     private(set) var searchResults = SpotifySearchResults()
 
@@ -163,17 +165,40 @@ final class SpotifyCatalog {
         return (try? await webAPI.albums(ofArtist: artist)) ?? []
     }
 
+    /// The episodes of a podcast, newest first, with where the user stopped.
+    func episodes(of show: SpotifyItem) async throws -> [SpotifyItem] {
+        guard isSignedIn else { throw AppError("Sign in to Spotify for podcasts.") }
+        let episodes = try await webAPI.episodes(of: show)
+        canResume = webAPI.canReadPlaybackPosition
+        return episodes
+    }
+
+    func show(of episode: SpotifyURI) async -> SpotifyItem? {
+        guard isSignedIn else { return nil }
+        return (try? await webAPI.show(of: episode)) ?? nil
+    }
+
     func albumAndArtist(of track: SpotifyURI) async -> (album: SpotifyItem?, artist: SpotifyItem?) {
         guard isSignedIn else { return (nil, nil) }
         return (try? await webAPI.albumAndArtist(of: track)) ?? (nil, nil)
     }
 
-    /// Turns an artist into their best known songs, so Sonos can play them.
+    /// Turns an artist into their best known songs and a podcast into its newest
+    /// episode, so Sonos can play them.
     func resolve(_ request: PlayRequest) async throws -> PlayRequest {
-        guard case .artist(let artist, let shuffle) = request else { return request }
-        let songs = try await songs(of: artist)
-        guard !songs.isEmpty else { throw AppError("No songs found for \(artist.name).") }
-        return .songs(songs.map(\.uri), start: 0, shuffle: shuffle)
+        switch request {
+        case .artist(let artist, let shuffle):
+            let songs = try await songs(of: artist)
+            guard !songs.isEmpty else { throw AppError("No songs found for \(artist.name).") }
+            return .songs(songs.map(\.uri), start: 0, shuffle: shuffle)
+        case .show(let show):
+            guard let newest = try await episodes(of: show).first, let request = PlayRequest.tap(newest) else {
+                throw AppError("No episodes found for \(show.name).")
+            }
+            return request
+        default:
+            return request
+        }
     }
 
     // MARK: Liked Songs

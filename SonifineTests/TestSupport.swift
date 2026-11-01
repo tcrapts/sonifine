@@ -95,6 +95,10 @@ final class FakeSonosPlayer: SonosPlayer {
     /// What each `addToQueue` added, and after which song.
     private(set) var additions: [(items: [SonosQueueItem], after: Int?)] = []
     private(set) var seeks: [Int] = []
+    /// Each seek within the song, with the number of plays before it.
+    private(set) var positionSeeks: [(seconds: TimeInterval, afterPlays: Int)] = []
+    /// Like a speaker that has not loaded the song yet, refuse to seek within it before it plays.
+    var refusesSeekBeforePlay = false
     private(set) var playModes: [PlayMode] = []
     private(set) var plays = 0
     /// The streams `playStream` played, such as radio stations.
@@ -122,7 +126,10 @@ final class FakeSonosPlayer: SonosPlayer {
     func previous() async throws {}
     func seek(toTrack number: Int) async throws { seeks.append(number) }
     func removeFromQueue(_ index: Int) async throws { queueEntries.remove(at: index) }
-    func seek(to seconds: TimeInterval) async throws {}
+    func seek(to seconds: TimeInterval) async throws {
+        if refusesSeekBeforePlay, plays == 0 { throw AppError("Transition not available") }
+        positionSeeks.append((seconds, plays))
+    }
     func setPlayMode(_ mode: PlayMode) async throws { playModes.append(mode) }
 
     func replaceQueue(with items: [SonosQueueItem], groupID: String) async throws -> Int {
