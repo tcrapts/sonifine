@@ -19,8 +19,9 @@ final class RadioCatalog {
     }
 
     /// The Dutch stations to show first: their Sonos Radio IDs, and the name to search for.
+    /// Chosen by hand from Sonos Radio's search; add one by searching its name there.
     static let dutchStations = [
-        ("tunein:5668", "NPO Radio 2"), ("tunein:7177", "NPO Radio 1"), ("tunein:4855", "NPO 3FM"),
+        ("tunein:5668", "NPO Radio 2"), ("tunein:7177", "NPO Radio 1"), ("tunein:4345", "BNR Nieuwsradio"), ("tunein:4855", "NPO 3FM"),
         ("tunein:9724", "NPO Klassiek"), ("tunein:19004", "Qmusic"), ("tunein:4853", "Radio 538"),
         ("tunein:5568", "Sky Radio"), ("tunein:192652", "Radio Veronica"), ("tunein:17761", "100% NL"),
         ("tunein:7073", "Radio 10"), ("tunein:47580", "KINK"), ("tunein:17258", "SLAM!"),
