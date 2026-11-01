@@ -10,8 +10,12 @@ struct NowPlayingView: View {
     @State private var isLiked: Bool?
     @State private var path: [SpotifyItem] = []
     @State private var showsQueue = false
-    /// How far the cover is dragged sideways; far enough skips a song.
+    /// How far the finger drags the cover sideways. iOS sets it back to 0 itself
+    /// when it cancels the drag, for instance for the sheet.
+    @GestureState private var dragOffset: CGFloat = 0
+    /// Where the cover is on its own: springing back, or leaving and coming in on a skip.
     @State private var coverOffset: CGFloat = 0
+    @State private var isSkipping = false
 
     var body: some View {
         let status = sonos.selectedStatus
@@ -21,8 +25,8 @@ struct NowPlayingView: View {
                 Artwork(url: status.artworkURL, cornerRadius: 14)
                     .aspectRatio(1, contentMode: .fit)
                     .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
-                    .offset(x: coverOffset)
-                    .opacity(1 - min(abs(coverOffset) / 600, 0.5))
+                    .offset(x: dragOffset + coverOffset)
+                    .opacity(1 - min(abs(dragOffset + coverOffset) / 600, 0.5))
                     .gesture(skipBySwiping)
                 titleRow(status)
                 if status.duration > 0 {
@@ -46,6 +50,8 @@ struct NowPlayingView: View {
             .sheet(isPresented: $showsQueue) { QueueView() }
         }
         .modifier(VolumeOverlay())
+        // Whatever happened to a swipe, a new song shows its cover in the middle.
+        .onChange(of: status.spotifyTrack) { if !isSkipping { withAnimation(.spring) { coverOffset = 0 } } }
         .task(id: status.spotifyTrack) {
             isLiked = nil
             guard let track = status.spotifyTrack else { return }
@@ -56,25 +62,35 @@ struct NowPlayingView: View {
     /// Swipe the cover left for the next song, right for the previous one, as in Spotify.
     private var skipBySwiping: some Gesture {
         DragGesture(minimumDistance: 20)
-            .onChanged { drag in
+            .updating($dragOffset) { drag, offset, _ in
                 // Up and down belong to the sheet, which closes that way.
-                if abs(drag.translation.width) > abs(drag.translation.height) { coverOffset = drag.translation.width }
+                guard !isSkipping, abs(drag.translation.width) > abs(drag.translation.height) else { return }
+                offset = drag.translation.width
             }
             .onEnded { drag in
+                guard !isSkipping, abs(drag.translation.width) > abs(drag.translation.height) else { return }
+                // The drag offset goes back to 0 now; the cover keeps its place through `coverOffset`.
+                coverOffset = drag.translation.width
                 let width = drag.predictedEndTranslation.width
-                guard abs(width) > 120, abs(drag.translation.width) > abs(drag.translation.height) else {
+                guard abs(width) > 120 else {
                     withAnimation(.spring) { coverOffset = 0 }
                     return
                 }
-                let forward = width < 0
-                Task {
-                    withAnimation(.easeIn(duration: 0.15)) { coverOffset = forward ? -500 : 500 }
-                    if forward { await sonos.next() } else { await sonos.previous() }
-                    // The new cover comes in from the other side.
-                    coverOffset = forward ? 500 : -500
-                    withAnimation(.spring(duration: 0.35)) { coverOffset = 0 }
-                }
+                skip(forward: width < 0)
             }
+    }
+
+    private func skip(forward: Bool) {
+        isSkipping = true
+        Task {
+            defer { isSkipping = false }
+            withAnimation(.easeIn(duration: 0.15)) { coverOffset = forward ? -500 : 500 }
+            if forward { await sonos.next() } else { await sonos.previous() }
+            // The new cover comes in from the other side.
+            coverOffset = forward ? 500 : -500
+            try? await Task.sleep(for: .milliseconds(20))
+            withAnimation(.spring(duration: 0.35)) { coverOffset = 0 }
+        }
     }
 
     /// Close on the left, the room in the middle and the ⋯ menu on the right, as in Spotify.
