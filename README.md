@@ -21,7 +21,8 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
   room: bass, treble, loudness, Trueplay and **Reset to default**. Below it are
   its speakers with model, ID, serial number, versions and IP address.
 - **Now Playing** has the progress, shuffle, repeat, the queue, a heart for Liked
-  Songs, and "Go to album/artist" in the ⋯ menu. A long title scrolls.
+  Songs, and "Go to album/artist" in the ⋯ menu. A long title scrolls. Swipe the
+  cover left for the next song, right for the previous one.
 - The volume buttons work while the app is open, and also on the lock screen and
   in other apps while the Sonos plays and up to ten minutes after a pause. A bar
   at the top of the app shows the new volume.

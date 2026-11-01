@@ -10,6 +10,8 @@ struct NowPlayingView: View {
     @State private var isLiked: Bool?
     @State private var path: [SpotifyItem] = []
     @State private var showsQueue = false
+    /// How far the cover is dragged sideways; far enough skips a song.
+    @State private var coverOffset: CGFloat = 0
 
     var body: some View {
         let status = sonos.selectedStatus
@@ -19,6 +21,9 @@ struct NowPlayingView: View {
                 Artwork(url: status.artworkURL, cornerRadius: 14)
                     .aspectRatio(1, contentMode: .fit)
                     .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+                    .offset(x: coverOffset)
+                    .opacity(1 - min(abs(coverOffset) / 600, 0.5))
+                    .gesture(skipBySwiping)
                 titleRow(status)
                 if status.duration > 0 {
                     SongProgress(status: status) { position in Task { await sonos.seek(to: position) } }
@@ -46,6 +51,30 @@ struct NowPlayingView: View {
             guard let track = status.spotifyTrack else { return }
             isLiked = await catalog.isLiked(track)
         }
+    }
+
+    /// Swipe the cover left for the next song, right for the previous one, as in Spotify.
+    private var skipBySwiping: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { drag in
+                // Up and down belong to the sheet, which closes that way.
+                if abs(drag.translation.width) > abs(drag.translation.height) { coverOffset = drag.translation.width }
+            }
+            .onEnded { drag in
+                let width = drag.predictedEndTranslation.width
+                guard abs(width) > 120, abs(drag.translation.width) > abs(drag.translation.height) else {
+                    withAnimation(.spring) { coverOffset = 0 }
+                    return
+                }
+                let forward = width < 0
+                Task {
+                    withAnimation(.easeIn(duration: 0.15)) { coverOffset = forward ? -500 : 500 }
+                    if forward { await sonos.next() } else { await sonos.previous() }
+                    // The new cover comes in from the other side.
+                    coverOffset = forward ? 500 : -500
+                    withAnimation(.spring(duration: 0.35)) { coverOffset = 0 }
+                }
+            }
     }
 
     /// Close on the left, the room in the middle and the ⋯ menu on the right, as in Spotify.
