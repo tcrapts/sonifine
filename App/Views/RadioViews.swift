@@ -69,6 +69,34 @@ private struct RadioCategoryView: View {
     }
 }
 
+/// Sonos Radio on the start screen: its rows of stations, then its categories.
+struct RadioHomeContent: View {
+    @Environment(RadioCatalog.self) private var radio
+
+    var body: some View {
+        ForEach(radio.shelves) { shelf in
+            if shelf.items.contains(where: \.isStation) {
+                StationShelf(title: shelf.title, items: shelf.items)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(shelf.title).font(.title2.bold())
+                    ForEach(shelf.items) { item in
+                        RadioRow(item: item)
+                        if item.id != shelf.items.last?.id { Divider().padding(.leading, 60) }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+        if radio.shelves.isEmpty && radio.errorMessage == nil {
+            ProgressView().frame(maxWidth: .infinity)
+        }
+        if let message = radio.errorMessage {
+            Text(message).font(.footnote).foregroundStyle(.red).padding(.horizontal)
+        }
+    }
+}
+
 /// A titled, horizontal row of station cards.
 struct StationShelf: View {
     let title: String

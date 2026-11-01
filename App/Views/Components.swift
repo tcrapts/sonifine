@@ -497,3 +497,18 @@ struct CachedImage<Placeholder: View>: View {
         return ImageCache.shared.cached(url) ?? (loaded?.url == url ? loaded?.image : nil)
     }
 }
+
+/// A capsule on glass for a choice among a few, such as a search filter; the chosen
+/// one is green.
+struct GlassChip: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isSelected ? Color.white : .primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .glassEffect(isSelected ? .regular.tint(Color.accent).interactive() : .regular.interactive(), in: .capsule)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+    }
+}

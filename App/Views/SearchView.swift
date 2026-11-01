@@ -17,12 +17,22 @@ struct SearchView: View {
         let results = catalog.searchResults
         List {
             if !query.isEmpty {
-                Picker("Show", selection: $filter) {
-                    ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
+                // Chips that scroll sideways, as in Spotify, so every filter keeps its full name.
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(Filter.allCases) { option in
+                            Button(option.rawValue) { filter = option }
+                                .font(.subheadline.weight(.medium))
+                                .buttonStyle(GlassChip(isSelected: filter == option))
+                                .accessibilityAddTraits(filter == option ? .isSelected : [])
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
-                .pickerStyle(.segmented)
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                .listRowInsets(EdgeInsets())
             }
             switch filter {
             case .all:
