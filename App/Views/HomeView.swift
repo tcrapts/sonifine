@@ -46,7 +46,7 @@ struct HomeView: View {
         .task(id: source) { if source == .radio, radio.shelves.isEmpty { await radio.load() } }
         // The Spotify home needs the household, so it loads once Sonos is found.
         .task(id: sonos.groups.isEmpty) {
-            if catalog.homeShelves.isEmpty || catalog.library.playlists.isEmpty { await catalog.reload() }
+            if catalog.homeShelves.isEmpty || catalog.library.playlists.isEmpty { await catalog.reload(force: false) }
         }
     }
 

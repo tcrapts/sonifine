@@ -117,6 +117,20 @@ struct SpotifyWebAPITests {
         #expect(secrets.values["spotifyRefreshToken"] == "R2", "Spotify rotates the refresh token")
     }
 
+    @Test func afterTooManyRequestsNothingGoesOutForAWhile() async {
+        let api = api()
+        recorded.answer((200, token), when: isTokenRequest)
+        recorded.answer((429, "")) { $0.url?.path() == "/v1/search" }
+
+        await #expect(throws: AppError.self) { try await api.search("Coldplay") }
+        let sent = recorded.requests.count
+        await #expect(throws: AppError("Spotify asks Sonifine to slow down. It tries again in 1 min.")) {
+            try await api.search("Coldplay")
+        }
+
+        #expect(recorded.requests.count == sent, "the pause keeps Spotify's limit from growing")
+    }
+
     @Test func aRefusedRefreshSignsOut() async {
         let api = api()
         var signedOut = false

@@ -28,6 +28,11 @@ final class SpotifyWebAPI {
     /// The refresh in progress. Requests that need a token meanwhile wait for it.
     private var refresh: Task<String, Error>?
 
+    /// After a 429 ("too many requests") the app sends nothing until then: a minute
+    /// at first, twice as long each time Spotify refuses again, up to half an hour.
+    private var pausedUntil = Date.distantPast
+    private var pause: TimeInterval = 60
+
     /// Called when Spotify no longer accepts the sign-in.
     var onSignedOut: () -> Void = {}
 
@@ -161,14 +166,21 @@ final class SpotifyWebAPI {
         var seen = Set<String>()
         let uris = history.compactMap { $0.context.flatMap { SpotifyURI($0.uri) } }
             .filter { seen.insert($0.description).inserted }
-            .prefix(12)
+            .prefix(8)
         let knownByURI = Dictionary(known.map { ($0.uri, $0) }) { first, _ in first }
 
         var found: [SpotifyItem] = []
+        // Each one the library doesn't hold costs a request, and Spotify limits how
+        // many an app may send: look up at most four.
+        var lookups = 4
         for uri in uris {
             if let item = knownByURI[uri] {
                 found.append(item)
-            } else if uri.kind == .playlist, let playlist: Playlist = try? await get("/playlists/\(uri.id)") {
+                continue
+            }
+            guard lookups > 0, uri.kind == .playlist || uri.kind == .album else { continue }
+            lookups -= 1
+            if uri.kind == .playlist, let playlist: Playlist = try? await get("/playlists/\(uri.id)") {
                 found.append(contentsOf: [playlist.item].compactMap { $0 })
             } else if uri.kind == .album, let album: Album = try? await get("/albums/\(uri.id)") {
                 found.append(contentsOf: [album.item].compactMap { $0 })
@@ -273,16 +285,29 @@ final class SpotifyWebAPI {
     }
 
     private func send(_ method: String, _ path: String) async throws -> Data {
+        // Every request during a pause would make Spotify's limit last longer.
+        guard Date.now >= pausedUntil else { throw Self.slowDown(until: pausedUntil) }
         var request = URLRequest(url: URL(string: "https://api.spotify.com/v1" + path)!)
         request.httpMethod = method
         request.setValue("Bearer \(try await validAccessToken())", forHTTPHeaderField: "Authorization")
         let (data, status) = try await transport(request)
+        if status == 429 {
+            pausedUntil = Date.now.addingTimeInterval(pause)
+            pause = min(pause * 2, 30 * 60)
+            throw Self.slowDown(until: pausedUntil)
+        }
+        pause = 60
         if status == 403 { throw MissingPermission() }
         guard (200..<300).contains(status) else {
             let message = (try? JSONDecoder().decode(APIError.self, from: data))?.error.message
             throw AppError("Spotify: \(message ?? "request failed (\(status))")")
         }
         return data
+    }
+
+    private static func slowDown(until date: Date) -> AppError {
+        let minutes = max(1, Int((date.timeIntervalSinceNow / 60).rounded(.up)))
+        return AppError("Spotify asks Sonifine to slow down. It tries again in \(minutes) min.")
     }
 
     private static func encode(_ query: String) -> String {

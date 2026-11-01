@@ -100,15 +100,20 @@ final class SpotifyCatalog {
 
     // MARK: Reading
 
-    /// Reloads the library and the Spotify home.
-    func reload() async {
-        async let library: Void = loadLibrary()
+    /// When the library was last asked for, loaded or not.
+    private var libraryAsked = Date.distantPast
+
+    /// Reloads the library and the Spotify home: always when the user asks
+    /// (`force`), else at most every ten minutes, so failed loads don't repeat.
+    func reload(force: Bool = true) async {
+        async let library: Void = loadLibrary(force: force)
         async let home: Void = loadHome()
         _ = await (library, home)
     }
 
-    private func loadLibrary() async {
-        guard isSignedIn else { return }
+    private func loadLibrary(force: Bool) async {
+        guard isSignedIn, force || Date.now.timeIntervalSince(libraryAsked) > 10 * 60 else { return }
+        libraryAsked = .now
         do {
             library = try await webAPI.library()
             errorMessage = nil
