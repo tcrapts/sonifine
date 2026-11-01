@@ -388,29 +388,50 @@ final class SonosController {
     }
 
     /// Plays a Sonos Radio station on `group` instead of its queue. It needs the
-    /// household's Sonos Radio account, which the app reads from a station Sonos plays.
+    /// household's Sonos Radio account number, which Sonos keeps to itself: the app
+    /// uses the one it found before, else tries the likely ones until the speaker
+    /// plays, and remembers that one.
     private func play(_ station: RadioItem, on group: SonosGroup) async {
-        guard let radioAccount else {
-            actionError = "Play a Sonos Radio station once in the Sonos app, so Sonifine knows your Sonos Radio account."
-            return
-        }
-        guard let stream = station.stream(account: radioAccount) else {
-            actionError = "Sonos can't play this."
-            return
-        }
         isStartingPlayback = true
         defer { isStartingPlayback = false }
         lastAction[group.id] = .now
-        do {
-            try await player(group).playStream(stream)
-            statuses[group.id]?.isPlaying = true
-            actionError = nil
-        } catch {
-            guard !HTTP.isCancellation(error) else { return }
-            actionError = "Couldn't play \(station.name) on \(group.name): \(error.localizedDescription)"
+        let candidates = radioAccount.map { [$0] + RadioAccount.likely } ?? RadioAccount.likely
+        var failure: Error?
+        for account in candidates where account != radioAccount || account == candidates.first {
+            guard let stream = station.stream(account: account) else {
+                actionError = "Sonos can't play this."
+                return
+            }
+            do {
+                let player = player(group)
+                try await player.playStream(stream)
+                guard try await plays(player) else { continue }
+                remember(account)
+                statuses[group.id]?.isPlaying = true
+                actionError = nil
+                lastAction[group.id] = .now
+                await refresh([group])
+                return
+            } catch {
+                guard !HTTP.isCancellation(error) else { return }
+                failure = error
+            }
         }
+        actionError = "Couldn't play \(station.name) on \(group.name)"
+            + (failure.map { ": \($0.localizedDescription)" } ?? ". Play a Sonos Radio station once in the Sonos app, then try again.")
         lastAction[group.id] = .now
         await refresh([group])
+    }
+
+    /// Whether the speaker starts playing within a few seconds. With a wrong account
+    /// number it stops instead.
+    private func plays(_ player: SonosPlayer) async throws -> Bool {
+        for _ in 0..<8 {
+            try await Task.sleep(for: .milliseconds(500))
+            let status = try await player.status()
+            if !status.isStarting { return status.isPlaying }
+        }
+        return false
     }
 
     // MARK: Rooms

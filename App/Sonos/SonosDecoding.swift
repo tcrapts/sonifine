@@ -94,6 +94,7 @@ extension GroupStatus {
         self.init(
             volume: volume.value("CurrentVolume").flatMap(Int.init) ?? 0,
             isPlaying: state == "PLAYING" || state == "TRANSITIONING",
+            isStarting: state == "TRANSITIONING",
             position: SonosTime.seconds(position.value("RelTime")),
             duration: SonosTime.seconds(position.value("TrackDuration")),
             positionDate: date,

@@ -73,6 +73,8 @@ struct SonosDevice: Identifiable, Equatable {
 struct GroupStatus: Equatable {
     var volume = 0
     var isPlaying = false
+    /// Sonos is still starting the song or station (`TRANSITIONING`); `isPlaying` is true meanwhile.
+    var isStarting = false
     /// Seconds into the song when Sonos reported it, at `positionDate`.
     var position: TimeInterval = 0
     /// The length of the song in seconds; 0 for radio.

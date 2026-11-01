@@ -137,9 +137,14 @@ final class FakeSonosPlayer: SonosPlayer {
         return items.count
     }
 
+    /// Whether a stream plays, as the speaker decides; a wrong Sonos Radio account stops.
+    var playsStream: (SonosQueueItem) -> Bool = { _ in true }
+
     func playStream(_ item: SonosQueueItem) async throws {
         if let failure { throw failure }
         streams.append(item)
+        status.isPlaying = playsStream(item)
+        status.isStarting = false
     }
 
     func queue(from start: Int, count: Int) async throws -> [QueueEntry] {

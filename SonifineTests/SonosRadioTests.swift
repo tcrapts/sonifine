@@ -189,13 +189,17 @@ struct RadioPlaybackTests {
         #expect(controller.errorMessage == nil)
     }
 
-    @Test func withoutTheAccountNothingPlaysAndTheMessageSaysWhatToDo() async {
+    @Test func anUnknownAccountIsFoundByTryingAndThenRemembered() async {
         let controller = await controller()
+        fake.playsStream = { $0.uri.hasSuffix("sn=4") }
 
         await controller.play(.station(station("sonos:154250", "Smooth Jazz")))
+        #expect(fake.streams.map(\.uri).map { $0.components(separatedBy: "sn=").last } == ["2", "3", "4"])
+        #expect(controller.errorMessage == nil)
 
-        #expect(fake.streams.isEmpty)
-        #expect(controller.errorMessage?.contains("once in the Sonos app") == true)
+        await controller.play(.station(station("sonos:2997", "Hit List")))
+        #expect(fake.streams.last?.uri == "x-sonosapi-radio:2997?sid=303&flags=0&sn=4", "straight away the second time")
+        #expect(fake.streams.count == 4)
     }
 
     @Test func radioTakesNoCoversFromTheQueue() async {
