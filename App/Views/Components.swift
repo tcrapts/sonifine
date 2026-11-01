@@ -161,17 +161,33 @@ struct Shelf: View {
 }
 
 /// A song, playlist, album or artist in a list. Items with a page open it; the
-/// others play on tap.
+/// others play on tap. A song has a ⋯ menu with the queue actions, as in Spotify.
 struct ItemRow: View {
     let item: SpotifyItem
     let onPlay: () -> Void
+    @Environment(SonosController.self) private var sonos
+
+    /// The song the selected room plays now: green, with a sound icon, as in Spotify.
+    private var isCurrent: Bool { item.isTrack && sonos.selectedStatus.spotifyTrack == item.uri }
 
     var body: some View {
         Group {
             if item.opens {
                 NavigationLink(value: item) { label }
             } else {
-                Button(action: onPlay) { label }.tint(.primary)
+                HStack(spacing: 0) {
+                    // Borderless buttons keep their own tap area inside a list row.
+                    Button(action: onPlay) { label }.buttonStyle(.borderless).tint(.primary)
+                    if item.queues {
+                        Menu { QueueButtons(item: item) } label: {
+                            Image(systemName: "ellipsis").foregroundStyle(.secondary)
+                                .frame(width: 36, height: 44).contentShape(.rect)
+                        }
+                        .buttonStyle(.borderless)
+                        .tint(.secondary)
+                        .accessibilityLabel("More for \(item.name)")
+                    }
+                }
             }
         }
         .queueActions(for: item)
@@ -182,7 +198,16 @@ struct ItemRow: View {
             Artwork(url: item.imageURL, round: item.kind == .artist, cornerRadius: 4)
                 .frame(width: 48, height: 48)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).lineLimit(1)
+                HStack(spacing: 6) {
+                    if isCurrent {
+                        Image(systemName: "waveform")
+                            .symbolEffect(.variableColor.iterative, isActive: sonos.selectedStatus.isPlaying)
+                            .font(.caption.bold())
+                            .accessibilityLabel(sonos.selectedStatus.isPlaying ? "Playing" : "Paused")
+                    }
+                    Text(item.name).lineLimit(1)
+                }
+                .foregroundStyle(isCurrent ? Color.accent : .primary)
                 Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
