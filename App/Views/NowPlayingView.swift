@@ -283,15 +283,19 @@ private struct CoverStrip: View {
     /// Where the strip rests between drags: 0, or one cover aside during a skip.
     @State private var rest: CGFloat = 0
     @State private var isSkipping = false
-    private let spacing: CGFloat = 20
+    /// Wide enough that the neighbours stay off screen, shadow and all, until a drag.
+    private let spacing: CGFloat = 48
+
+    /// The neighbours show only while the strip moves.
+    private var isMoving: Bool { drag != 0 || rest != 0 || isSkipping }
 
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
             HStack(spacing: spacing) {
-                cover(previous)
-                cover(current)
-                cover(next)
+                cover(previous).opacity(isMoving ? 1 : 0)
+                cover(current).shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+                cover(next).opacity(isMoving ? 1 : 0)
             }
             .frame(width: width * 3 + spacing * 2, height: width)
             .offset(x: -(width + spacing) + drag + rest)
@@ -311,7 +315,6 @@ private struct CoverStrip: View {
     private func cover(_ url: URL?) -> some View {
         Artwork(url: url, cornerRadius: 14)
             .aspectRatio(1, contentMode: .fit)
-            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
     }
 
     private func swipe(width: CGFloat) -> some Gesture {
@@ -332,16 +335,23 @@ private struct CoverStrip: View {
                 }
                 let forward = predicted < 0
                 isSkipping = true
-                withAnimation(.spring(duration: 0.3)) { rest = forward ? -(width + spacing) : width + spacing }
-                Task {
-                    await skip(forward)
-                    // The new cover ends the skip in `onChange`. If none came (a refused
-                    // skip, or the same album cover), go back to the middle.
-                    try? await Task.sleep(for: .seconds(1))
-                    guard isSkipping else { return }
-                    withAnimation(.spring(duration: 0.3)) { rest = 0 }
-                    isSkipping = false
+                // Skip once the neighbour is in the middle, so the new song's cover can't
+                // arrive halfway through the animation.
+                withAnimation(.spring(duration: 0.3)) {
+                    rest = forward ? -(width + spacing) : width + spacing
+                } completion: {
+                    Task { await finishSkip(forward: forward) }
                 }
             }
+    }
+
+    private func finishSkip(forward: Bool) async {
+        await skip(forward)
+        // The new cover ends the skip in `onChange`. If none came (a refused skip,
+        // or the same album cover), go back to the middle.
+        try? await Task.sleep(for: .seconds(1))
+        guard isSkipping else { return }
+        withAnimation(.spring(duration: 0.3)) { rest = 0 }
+        isSkipping = false
     }
 }
