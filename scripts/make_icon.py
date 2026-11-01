@@ -18,6 +18,7 @@ CENTRE = S / 2
 TICKS = 57  # the steps on the dial
 LEVEL = 0.68  # share of the steps that light up
 START, SWEEP = 135, 270  # degrees, clockwise from the positive x-axis
+LIT = round((TICKS - 1) * LEVEL)  # index of the last lit step
 CYAN, VIOLET, PINK = (94, 224, 255), (150, 120, 255), (255, 140, 214)
 
 
@@ -50,12 +51,11 @@ def background():
 def ticks(draw, lit_only, width_scale=1.0):
     inner, outer = 0.300 * S, 0.365 * S
     width = round(0.0125 * S * width_scale)
-    lit = round((TICKS - 1) * LEVEL)
     for i in range(TICKS):
-        if lit_only and i > lit:
+        if lit_only and i > LIT:
             continue
         angle = START + SWEEP * i / (TICKS - 1)
-        colour = lit_colour(i / lit) if i <= lit else (255, 255, 255, 46)
+        colour = lit_colour(i / LIT) if i <= LIT else (255, 255, 255, 46)
         a, b = point(angle, inner), point(angle, outer)
         draw.line([a, b], fill=colour, width=width)
         for end in (a, b):  # rounded caps
@@ -88,7 +88,7 @@ def knob(icon):
         outline=(150, 130, 230), width=round(S * 0.004),
     )
 
-    angle = START + SWEEP * LEVEL
+    angle = START + SWEEP * LIT / (TICKS - 1)
     x, y = point(angle, radius * 0.68)
     dot = S * 0.026
     glow = Image.new("L", (S, S), 0)
