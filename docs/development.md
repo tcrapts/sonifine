@@ -29,7 +29,7 @@ the iPhone volume before and after, and whether the app counted it as a press.
 ## Icon
 
 `make icon` redraws `App/Assets.xcassets/AppIcon.appiconset/icon-1024.png` with
-`scripts/make_icon.py`: twelve bars that rise in small steps.
+`scripts/make_icon.py`: a volume dial with 57 fine steps, two thirds lit.
 
 ## Simulator
 
