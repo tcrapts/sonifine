@@ -7,7 +7,7 @@ onder **System → ⚙️**.
 
 ## Wat de app doet
 
-- **Home** toont je Spotify-startpagina: Good morning, Daily Mix, Release Radar,
+- **Home** toont je Spotify-startpagina: Jump back in, Daily Mix, Release Radar,
   Your top mixes, radiozenders en meer. De ▶ op een hoes speelt meteen af.
 - **Library** toont je playlists, Liked Songs en albums.
 - **Search** zoekt in heel Spotify naar nummers, artiesten, albums en playlists.
