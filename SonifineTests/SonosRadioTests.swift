@@ -180,6 +180,7 @@ struct RadioPlaybackTests {
         let controller = await controller()
         // the owner once played a Sonos Radio station in the Sonos app.
         fake.status.radioAccount = RadioAccount(accountNumber: "7")
+        fake.status.isPlaying = true
         await controller.refresh()
 
         await controller.play(.station(station("sonos:154250", "Smooth Jazz")))
@@ -189,8 +190,23 @@ struct RadioPlaybackTests {
         #expect(controller.errorMessage == nil)
     }
 
+    @Test func anAccountIsLearnedOnlyFromAStationThatPlays() async {
+        let controller = await controller()
+        controller.streamStartChecks = 2
+        // A station that hangs while starting, as with a wrong number.
+        fake.status.radioAccount = RadioAccount(accountNumber: "3")
+        (fake.status.isPlaying, fake.status.isStarting) = (true, true)
+        await controller.refresh()
+        fake.playsStream = { $0.uri.hasSuffix("sn=2") }
+
+        await controller.play(.station(station("tunein:4345", "BNR Nieuwsradio")))
+
+        #expect(fake.streams.first?.uri.hasSuffix("sn=2") == true, "the hanging number 3 wasn't learned")
+    }
+
     @Test func anUnknownAccountIsFoundByTryingAndThenRemembered() async {
         let controller = await controller()
+        controller.streamStartChecks = 2
         fake.playsStream = { $0.uri.hasSuffix("sn=4") }
 
         await controller.play(.station(station("sonos:154250", "Smooth Jazz")))

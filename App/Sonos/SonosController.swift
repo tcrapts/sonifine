@@ -50,6 +50,8 @@ final class SonosController {
     private var householdID: String?
     private var account: SpotifyAccount
     private var radioAccount: RadioAccount?
+    /// How many times, half a second apart, the app checks whether a station plays.
+    var streamStartChecks = 30
     /// When the user last changed a group. Polls that started earlier are stale for it.
     private var lastAction: [String: Date] = [:]
     private var pendingVolume: (groupID: String, adjustment: Int)?
@@ -160,7 +162,8 @@ final class SonosController {
                     status.volume = statuses[id]?.volume ?? status.volume
                 }
                 remember(status.spotifyAccount)
-                remember(status.radioAccount)
+                // A wrong account number leaves the speaker starting forever; learn only from one that plays.
+                if status.isPlaying, !status.isStarting { remember(status.radioAccount) }
                 regrouped = regrouped || status.followsAnotherGroup
                 if statuses[id].map(status.differs(from:)) ?? true { statuses[id] = status }
             }
@@ -423,16 +426,16 @@ final class SonosController {
         await refresh([group])
     }
 
-    /// Whether the speaker plays. A live stream can take the speaker many seconds to
-    /// buffer, so starting counts until the speaker plays or stops; a wrong account
-    /// number makes it stop.
+    /// Whether the speaker plays within 15 seconds. A live stream first reports
+    /// stopped, then connects and buffers for several seconds; with a wrong account
+    /// number it keeps starting and never plays.
     private func plays(_ player: SonosPlayer) async throws -> Bool {
-        for _ in 0..<30 {
+        for _ in 0..<streamStartChecks {
             try await Task.sleep(for: .milliseconds(500))
             let status = try await player.status()
-            if !status.isStarting { return status.isPlaying }
+            if status.isPlaying, !status.isStarting { return true }
         }
-        return true
+        return false
     }
 
     // MARK: Rooms
