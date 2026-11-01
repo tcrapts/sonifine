@@ -137,11 +137,13 @@ final class SpotifyCatalog {
         }
         if isSignedIn {
             do {
-                let web = try await webAPI.library()
-                loaded.shows = web.shows
-                loaded.recentlyPlayed = web.recentlyPlayed
-                loaded.jumpBackIn = web.jumpBackIn
-                if !isLinked { loaded = web }
+                if isLinked {
+                    // Spotify's quota is small: ask the Web API only what the link lacks.
+                    (loaded.shows, loaded.recentlyPlayed, loaded.jumpBackIn) =
+                        try await webAPI.extras(known: loaded.playlists + loaded.albums)
+                } else {
+                    loaded = try await webAPI.library()
+                }
             } catch {
                 // Without the link the Web API is the only source; with it, the rest still stands.
                 if !isLinked || HTTP.isCancellation(error) { failure = failure ?? error }

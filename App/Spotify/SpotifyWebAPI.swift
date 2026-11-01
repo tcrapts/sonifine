@@ -156,6 +156,18 @@ final class SpotifyWebAPI {
         return library
     }
 
+    /// Only what the Sonos link doesn't give: the podcasts and what played recently.
+    /// `known` are the playlists and albums the link already loaded.
+    func extras(known: [SpotifyItem]) async throws -> (shows: [SpotifyItem], recentlyPlayed: [SpotifyItem], jumpBackIn: [SpotifyItem]) {
+        async let savedShows: [SavedShow?] = all("/me/shows?limit=50")
+        async let recentPage: Page<PlayHistory> = get("/me/player/recently-played?limit=50")
+        let shows = try await savedShows.compactMap { $0?.show.item }
+        let history = try await recentPage.items.compactMap { $0 }
+        var seen = Set<SpotifyURI>()
+        let recent = history.compactMap(\.track.item).filter { seen.insert($0.uri).inserted }
+        return (shows, recent, await contexts(of: history, known: known))
+    }
+
     /// Every liked song, newest first.
     func likedSongs() async throws -> [SpotifyItem] {
         let saved: [SavedTrack?] = try await all("/me/tracks?limit=50")
