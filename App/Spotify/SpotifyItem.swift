@@ -6,6 +6,8 @@ struct SpotifyItem: Identifiable, Hashable {
     let name: String
     let subtitle: String
     let imageURL: URL?
+    /// When the song was added to the playlist it was loaded from.
+    var addedAt: Date? = nil
 
     var id: String { uri.description }
     var kind: SpotifyURI.Kind { uri.kind }

@@ -141,4 +141,22 @@ struct SpotifyWebAPITests {
 
         #expect(songs.map(\.name) == ["Yellow", "Shiver"])
     }
+
+    @Test func aLongPlaylistComesWholeAndSortsByDateAdded() async throws {
+        let api = api()
+        recorded.answer((200, token), when: isTokenRequest)
+        recorded.answer((200, """
+            {"items":[{"added_at":"2024-05-01T10:00:00Z","item":{"uri":"spotify:track:A","name":"Yellow","artists":[]}}],            "next":"https://api.spotify.com/v1/playlists/P/items?offset=100&limit=100"}
+            """)) { $0.url?.path() == "/v1/playlists/P/items" && $0.url?.query()?.contains("offset") != true }
+        recorded.answer((200, """
+            {"items":[{"added_at":"2026-10-30T08:00:00Z","item":{"uri":"spotify:track:B","name":"Shiver","artists":[]}},            {"item":{"uri":"spotify:track:C","name":"Clocks","artists":[]}}],"next":null}
+            """)) { $0.url?.query()?.contains("offset=100") == true }
+        let playlist = SpotifyItem(uri: SpotifyURI("spotify:playlist:P")!, name: "Mix", subtitle: "", imageURL: nil)
+
+        let songs = try await api.songs(of: playlist)
+
+        #expect(songs.map(\.name) == ["Yellow", "Shiver", "Clocks"])
+        #expect(PlaylistOrder.recentlyAdded.apply(to: songs).map(\.name) == ["Shiver", "Yellow", "Clocks"],
+                "newest first; a song without a date goes last")
+    }
 }

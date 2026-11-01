@@ -180,13 +180,19 @@ final class SpotifyWebAPI {
         switch item.kind {
         case .playlist:
             // Newer Spotify responses call the entries `items`, older ones `tracks`.
-            let page: Page<PlaylistEntry>
+            var page: Page<PlaylistEntry>
             do {
                 page = try await get("/playlists/\(item.uri.id)/items?limit=100")
             } catch {
                 page = try await get("/playlists/\(item.uri.id)/tracks?limit=100")
             }
-            return page.items.compactMap { $0?.song?.item }
+            // Spotify gives 100 songs per page; sorting needs all of them.
+            var entries = page.items
+            while let next = page.nextPath, entries.count < 2000 {
+                page = try await get(next)
+                entries += page.items
+            }
+            return entries.compactMap { $0?.song }
         case .album:
             let page: Page<Track> = try await get("/albums/\(item.uri.id)/tracks?limit=50")
             return page.items.compactMap { $0?.item(albumImage: item.imageURL) }
@@ -271,7 +277,15 @@ private struct APIError: Decodable {
 }
 
 /// Spotify sometimes returns `null` entries in lists, hence the optionals.
-private struct Page<T: Decodable>: Decodable { let items: [T?] }
+private struct Page<T: Decodable>: Decodable {
+    let items: [T?]
+    let next: String?
+
+    /// The next page as a path for `get`.
+    var nextPath: String? {
+        next.map { $0.replacingOccurrences(of: "https://api.spotify.com/v1", with: "") }
+    }
+}
 
 private struct SpotifyImage: Decodable { let url: String }
 
@@ -344,18 +358,21 @@ private struct PlayHistory: Decodable {
     let context: Context?
 }
 
-/// A playlist entry. Podcast episodes and missing songs come out as nil.
+/// A playlist entry, with the day it was added. Podcast episodes and missing songs come out as nil.
 private struct PlaylistEntry: Decodable {
-    let song: Track?
+    let song: SpotifyItem?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let entry = (try? container.decodeIfPresent(Track.self, forKey: .track))
             ?? (try? container.decodeIfPresent(Track.self, forKey: .item))
-        song = entry.flatMap { SpotifyURI($0.uri)?.kind == .track ? $0 : nil }
+        var song = entry?.item
+        song?.addedAt = (try? container.decodeIfPresent(String.self, forKey: .added_at))
+            .flatMap { $0 }.flatMap { try? Date($0, strategy: .iso8601) }
+        self.song = song
     }
 
-    private enum CodingKeys: String, CodingKey { case track, item }
+    private enum CodingKeys: String, CodingKey { case track, item, added_at }
 }
 
 private struct SearchResponse: Decodable {
