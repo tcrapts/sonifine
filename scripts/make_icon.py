@@ -31,9 +31,18 @@ def lit_colour(t):
     return mix(CYAN, VIOLET, t * 2) if t < 0.5 else mix(VIOLET, PINK, t * 2 - 1)
 
 
+def step_angle(i):
+    return START + SWEEP * i / (TICKS - 1)
+
+
 def point(angle, radius):
     a = math.radians(angle)
     return CENTRE + radius * math.cos(a), CENTRE + radius * math.sin(a)
+
+
+def circle(x, y, radius):
+    """The bounding box of a circle, as Pillow's ellipse takes it."""
+    return [x - radius, y - radius, x + radius, y + radius]
 
 
 def background():
@@ -54,21 +63,19 @@ def ticks(draw, lit_only, width_scale=1.0):
     for i in range(TICKS):
         if lit_only and i > LIT:
             continue
-        angle = START + SWEEP * i / (TICKS - 1)
+        angle = step_angle(i)
         colour = lit_colour(i / LIT) if i <= LIT else (255, 255, 255, 46)
         a, b = point(angle, inner), point(angle, outer)
         draw.line([a, b], fill=colour, width=width)
         for end in (a, b):  # rounded caps
-            draw.ellipse([end[0] - width / 2, end[1] - width / 2, end[0] + width / 2, end[1] + width / 2], fill=colour)
+            draw.ellipse(circle(*end, width / 2), fill=colour)
 
 
 def knob(icon):
     """A raised disc with a light indicator dot pointing at the level."""
     radius = 0.215 * S
     shadow = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(shadow).ellipse(
-        [CENTRE - radius, CENTRE - radius + S * 0.02, CENTRE + radius, CENTRE + radius + S * 0.02], fill=150
-    )
+    ImageDraw.Draw(shadow).ellipse(circle(CENTRE, CENTRE + S * 0.02, radius), fill=150)
     shadow = shadow.filter(ImageFilter.GaussianBlur(S * 0.03))
     icon.paste((4, 2, 16), mask=shadow)
 
@@ -79,22 +86,18 @@ def knob(icon):
         t = (y - (CENTRE - radius)) / (2 * radius)
         disc_draw.line([(0, y), (S, y)], fill=mix(top, bottom, t))
     mask = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(mask).ellipse([CENTRE - radius, CENTRE - radius, CENTRE + radius, CENTRE + radius], fill=255)
+    ImageDraw.Draw(mask).ellipse(circle(CENTRE, CENTRE, radius), fill=255)
     icon.paste(disc, mask=mask)
 
-    rim = ImageDraw.Draw(icon)
-    rim.ellipse(
-        [CENTRE - radius, CENTRE - radius, CENTRE + radius, CENTRE + radius],
-        outline=(150, 130, 230), width=round(S * 0.004),
-    )
+    draw = ImageDraw.Draw(icon)
+    draw.ellipse(circle(CENTRE, CENTRE, radius), outline=(150, 130, 230), width=round(S * 0.004))  # rim
 
-    angle = START + SWEEP * LIT / (TICKS - 1)
-    x, y = point(angle, radius * 0.68)
+    x, y = point(step_angle(LIT), radius * 0.68)
     dot = S * 0.026
     glow = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(glow).ellipse([x - dot * 2, y - dot * 2, x + dot * 2, y + dot * 2], fill=200)
+    ImageDraw.Draw(glow).ellipse(circle(x, y, dot * 2), fill=200)
     icon.paste(lit_colour(1), mask=glow.filter(ImageFilter.GaussianBlur(dot)))
-    rim.ellipse([x - dot, y - dot, x + dot, y + dot], fill=(255, 255, 255))
+    draw.ellipse(circle(x, y, dot), fill=(255, 255, 255))
 
 
 icon = background()
