@@ -1,67 +1,73 @@
 # Sonifine
 
-Sonifine is een iOS-app om Sonos te bedienen vanaf de iPhone, naar het voorbeeld
-van Sonify. Het verschil: de volumeknoppen van de iPhone veranderen het Sonos-volume
-in kleine stappen, standaard 1 op een schaal van 100. De stapgrootte stel je in
-onder **System → ⚙️**.
+Sonifine is an iOS app that controls Sonos from the iPhone, modelled on Sonify.
+What sets it apart: the iPhone volume buttons change the Sonos volume in small
+steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙️**.
 
-## Wat de app doet
+## What the app does
 
-- **Home** toont je Spotify-startpagina: Jump back in, Daily Mix, Release Radar,
-  Your top mixes, radiozenders en meer. De ▶ op een hoes speelt meteen af.
-- **Library** toont je playlists, al je Liked Songs en albums. Met ↑↓ rechtsboven
-  sorteer je Liked Songs en playlists op titel, artiest, album of **Recently added**;
-  kies dezelfde nog eens voor de andere richting. Play en Shuffle volgen die volgorde.
-- **Search** zoekt in heel Spotify naar nummers, artiesten, albums en playlists.
-- Swipe naar rechts op een nummer, album of playlist voor **Play Next**, naar links
-  voor **Add to Queue**. Op een hoes: lang indrukken.
-- **System** toont elke kamer met wat er speelt, play/pause en volume.
-- De schuifknop op een kamer (of **System → ⚙️ → Rooms**) toont het geluid van
-  die kamer: bass, treble, loudness, Trueplay en **Reset to default**. Daaronder
-  staan de speakers met model, ID, serienummer, versies en IP-adres.
-- **Now Playing** heeft voortgang, shuffle, herhalen, de wachtrij, een hartje voor
-  Liked Songs en "Go to album/artist".
-- De volumeknoppen werken als de app open is, en ook op het vergrendelscherm en in
-  andere apps zolang de Sonos speelt of tot tien minuten na een pauze. Een balk
-  bovenin de app toont het nieuwe volume.
-- Het vergrendelscherm en het bedieningspaneel tonen wat de Sonos speelt, met
-  play/pause, volgende, vorige en spoelen.
+- **Home** shows your Spotify home page: Jump back in, Daily Mix, Release Radar,
+  Your top mixes, radio stations and more. The ▶ on a cover plays it at once.
+- **Library** shows your playlists, all your Liked Songs and your albums. With ↑↓
+  at the top right you sort Liked Songs and playlists by title, artist, album or
+  **Recently added**; choose the same key again for the other direction. Play and
+  Shuffle follow that order.
+- **Search** searches all of Spotify for songs, artists, albums and playlists.
+- Each song has a ⋯ menu with **Play Next** and **Add to Queue**. Swipe right on a
+  song, album or playlist for Play Next, left for Add to Queue; on a cover, touch
+  and hold. The song that plays shows in green.
+- **System** shows every room with what it plays, play/pause and volume.
+- The slider icon on a room (or **System → ⚙️ → Rooms**) shows the sound of that
+  room: bass, treble, loudness, Trueplay and **Reset to default**. Below it are
+  its speakers with model, ID, serial number, versions and IP address.
+- **Now Playing** has the progress, shuffle, repeat, the queue, a heart for Liked
+  Songs, and "Go to album/artist" in the ⋯ menu. A long title scrolls.
+- The volume buttons work while the app is open, and also on the lock screen and
+  in other apps while the Sonos plays and up to ten minutes after a pause. A bar
+  at the top of the app shows the new volume.
+- The lock screen and Control Center show what the Sonos plays, with play/pause,
+  next, previous and seeking.
+- Covers stay in memory, and those of the next three songs load ahead, so a new
+  song shows its cover at once.
 
-## Projectindeling
+## Layout
 
-- `App/`: de Swift-code en de assets. Xcode neemt elk bestand in deze map
-  automatisch op.
-- `Info.plist`: de rechten voor het lokale netwerk, Bonjour en de Spotify-login.
-- `Sonifine.xcodeproj/`: het Xcode-project.
-- `scripts/`: hulpscripts, zoals het tekenen van het icoon.
-- `docs/`: architectuur, ontwikkeling, testen en beslissingen (`docs/adr/`).
+- `App/`: the Swift code and the assets. Xcode picks up every file in this
+  folder by itself.
+- `Info.plist`: the permissions for the local network, Bonjour, background audio
+  and the Spotify sign-in.
+- `Sonifine.xcodeproj/`: the Xcode project.
+- `SonifineTests/`: the unit tests.
+- `scripts/`: helper scripts, such as the one that draws the icon.
+- `docs/`: architecture, development, testing and decisions (`docs/adr/`).
 
-## Benodigde software
+## Requirements
 
-- Xcode 27 met de iOS 26 SDK.
-- Een Apple-account in Xcode (Settings → Accounts) om op een iPhone te installeren.
-- `uv` voor de scripts in `scripts/`.
+- Xcode 27 with the iOS 26 SDK.
+- An Apple account in Xcode (Settings → Accounts) to install on an iPhone.
+- `uv` for the scripts in `scripts/`.
 
-## Snel starten
+## Quick start
 
 ```bash
-make build    # bouwt voor de simulator
-make device   # bouwt en installeert op de iPhone
-make help     # toont alle targets
+make build    # builds for the simulator
+make test     # runs the unit tests in the simulator
+make device   # builds and installs on the iPhone
+make help     # lists all targets
 ```
 
-## Op je iPhone zetten
+## Install on your iPhone
 
-Na een wijziging zet je de app zo op je iPhone:
+After a change, put the app on your iPhone like this:
 
-1. Ontgrendel je iPhone en zorg dat hij op dezelfde wifi zit als de Mac (of aan de kabel).
-2. Draai `make device`. Je logins blijven bewaard.
+1. Unlock the iPhone and keep it on the same Wi-Fi as the Mac, or on the cable.
+2. Run `make device`. Your sign-ins stay.
 
-De eerste keer op een nieuwe Mac of iPhone zijn er een paar stappen meer: je
-Apple-account in Xcode, de iPhone één keer koppelen via de kabel met
-Developer Mode aan, en de ontwikkelaar vertrouwen op de iPhone. Die staan, met
-oplossingen voor de bekende foutmeldingen, in
-[docs/development.md](docs/development.md#install-on-the-iphone).
+The first time on a new Mac or iPhone takes a few more steps: your Apple account
+in Xcode, pairing the iPhone once over the cable with Developer Mode on, and
+trusting the developer on the iPhone.
+[docs/development.md](docs/development.md#install-on-the-iphone) lists them,
+with fixes for the known error messages.
 
-Met een gratis Apple-account start de app na zeven dagen niet meer; draai dan
-opnieuw `make device`.
+With a free Apple account the app stops opening after seven days; run
+`make device` again.

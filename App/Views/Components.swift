@@ -93,7 +93,7 @@ struct Artwork: View {
         // The clear color takes the size it is given; the image fills and is clipped to it.
         Color.clear
             .overlay {
-                AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: {
+                CachedImage(url: url) {
                     Image(systemName: round ? "person.fill" : "music.note").font(.title2).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.primary.opacity(0.08))
@@ -456,5 +456,33 @@ struct MarqueeText: View {
         let cycle = pause + round / speed
         let elapsed = date.timeIntervalSince(start).truncatingRemainder(dividingBy: cycle)
         return elapsed < pause ? 0 : CGFloat(elapsed - pause) * speed
+    }
+}
+
+/// An image from `ImageCache`: shown at once when it is there, else loaded.
+struct CachedImage<Placeholder: View>: View {
+    let url: URL?
+    @ViewBuilder let placeholder: () -> Placeholder
+    @State private var loaded: (url: URL, image: UIImage)?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                placeholder()
+            }
+        }
+        .task(id: url) {
+            guard let url, ImageCache.shared.cached(url) == nil,
+                  let image = await ImageCache.shared.image(for: url) else { return }
+            loaded = (url, image)
+        }
+    }
+
+    /// The cover of this URL only, so a new song never shows the old cover.
+    private var image: UIImage? {
+        guard let url else { return nil }
+        return ImageCache.shared.cached(url) ?? (loaded?.url == url ? loaded?.image : nil)
     }
 }

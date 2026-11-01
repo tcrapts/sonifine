@@ -30,7 +30,8 @@ protocol SonosPlayer {
     /// Adds `items` to the queue: right after `current` (counted from 1) for
     /// Play Next, or at the end. Returns the number of songs added.
     func addToQueue(_ items: [SonosQueueItem], after current: Int?) async throws -> Int
-    func queue() async throws -> [QueueEntry]
+    /// `count` songs of the queue from place `start`, counted from 0.
+    func queue(from start: Int, count: Int) async throws -> [QueueEntry]
 
     /// Bass, treble, loudness and Trueplay of this player's room.
     func soundSettings() async throws -> SoundSettings
@@ -129,13 +130,13 @@ final class SOAPSonosPlayer: SonosPlayer {
         return added
     }
 
-    func queue() async throws -> [QueueEntry] {
+    func queue(from start: Int, count: Int) async throws -> [QueueEntry] {
         let response = try await call(.contentDirectory, "Browse", [
             "ObjectID": "Q:0", "BrowseFlag": "BrowseDirectChildren",
-            "Filter": "dc:title,dc:creator,upnp:albumArtURI,res", "StartingIndex": "0",
-            "RequestedCount": "200", "SortCriteria": "",
+            "Filter": "dc:title,dc:creator,upnp:albumArtURI,res", "StartingIndex": String(start),
+            "RequestedCount": String(count), "SortCriteria": "",
         ])
-        return QueueEntry.entries(fromDIDL: response.value("Result") ?? "", player: address)
+        return QueueEntry.entries(fromDIDL: response.value("Result") ?? "", player: address, startingAt: start)
     }
 
     func soundSettings() async throws -> SoundSettings {
@@ -228,4 +229,9 @@ final class SOAPSonosPlayer: SonosPlayer {
             }
         }
     }
+}
+
+extension SonosPlayer {
+    /// The first 200 songs of the queue.
+    func queue() async throws -> [QueueEntry] { try await queue(from: 0, count: 200) }
 }

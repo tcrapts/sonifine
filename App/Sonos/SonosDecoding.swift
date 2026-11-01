@@ -103,11 +103,11 @@ extension GroupStatus {
 }
 
 extension QueueEntry {
-    /// The songs in the DIDL-Lite `Result` of `Browse Q:0`.
-    static func entries(fromDIDL didl: String, player: URL) -> [QueueEntry] {
+    /// The songs in the DIDL-Lite `Result` of `Browse Q:0`, which began at place `start`.
+    static func entries(fromDIDL didl: String, player: URL, startingAt start: Int = 0) -> [QueueEntry] {
         guard let root = XMLNode.parse(didl) else { return [] }
         return root.descendants(named: "item").enumerated().map { index, item in
-            QueueEntry(id: index,
+            QueueEntry(id: start + index,
                        title: item.value("title") ?? "",
                        artist: item.value("creator") ?? "",
                        artworkURL: item.value("albumArtURI").flatMap { URL(sonosArtwork: $0, player: player) },

@@ -63,6 +63,20 @@ struct SonosControllerTests {
         #expect(fake.plays == 1)
     }
 
+    @Test func theCoversToLoadAheadAreThoseOfTheNextThreeSongs() async {
+        let controller = await controller()
+        fake.queueEntries = (0..<6).map { index in
+            QueueEntry(id: index, title: "\(index)", artist: "",
+                       artworkURL: URL(string: "http://10.0.0.2:1400/getaa?\(index)"), spotifyTrack: nil)
+        }
+        fake.status.queuePosition = 2  // the second song plays
+        await controller.refresh()
+
+        let covers = await controller.upcomingArtwork()
+
+        #expect(covers.map(\.query) == ["2", "3", "4"])
+    }
+
     @Test func shuffleNeverJumpsToASong() async {
         let controller = await controller()
         await controller.play(.songs([song("A").uri, song("B").uri], start: 1, shuffle: true))

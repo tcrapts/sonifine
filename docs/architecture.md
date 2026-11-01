@@ -10,7 +10,9 @@ through one `\.play` action.
 | `SpotifyCatalog` | `App/Spotify/` | `SpotifyWebAPI` (library sign-in), `SonosSpotifyService` (link) |
 
 `App/Support/` holds the seams every adapter shares: `HTTPTransport`,
-`SecretStore` (the Keychain) and `XMLNode`, the one XML reader.
+`SecretStore` (the Keychain) and `XMLNode`, the one XML reader. `ImageCache`
+keeps covers in memory, decoded; after each song change the app loads the covers
+of the next three songs in the queue (`SonosController.upcomingArtwork`).
 `App/Volume/VolumeButtonWatcher` turns presses into
 `SonosController.nudgeVolume`; `VolumePress` holds its rules.
 `App/Volume/NowPlayingSession` keeps the buttons and the lock screen for the app.

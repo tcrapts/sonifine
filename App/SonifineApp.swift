@@ -52,6 +52,10 @@ struct SonifineApp: App {
                     nowPlaying.update(group: sonos.selectedGroup, status: sonos.selectedStatus)
                 }
             }
+            // Load the covers of the next songs, so a new song shows its cover at once.
+            .task(id: "\(sonos.selectedStatus.queuePosition) \(sonos.selectedStatus.spotifyTrack?.description ?? "")") {
+                ImageCache.shared.prefetch(await sonos.upcomingArtwork())
+            }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 guard phase == .active else { return }
                 nowPlaying.start()

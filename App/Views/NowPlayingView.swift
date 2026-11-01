@@ -179,7 +179,7 @@ private struct BlurredArtwork: View {
     var body: some View {
         ZStack {
             Color(.systemBackground)
-            AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
+            CachedImage(url: url) { Color.clear }
                 .blur(radius: 60)
                 .scaleEffect(1.4)
                 .opacity(0.8)

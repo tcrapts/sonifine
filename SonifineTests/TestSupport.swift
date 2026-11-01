@@ -134,7 +134,9 @@ final class FakeSonosPlayer: SonosPlayer {
         return items.count
     }
 
-    func queue() async throws -> [QueueEntry] { queueEntries }
+    func queue(from start: Int, count: Int) async throws -> [QueueEntry] {
+        Array(queueEntries.dropFirst(start).prefix(count))
+    }
 
     func soundSettings() async throws -> SoundSettings { sound }
 

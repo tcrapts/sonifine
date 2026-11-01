@@ -247,6 +247,14 @@ final class SonosController {
         return (try? await player(group).queue()) ?? []
     }
 
+    /// The covers of the next `count` songs, to load before they play.
+    func upcomingArtwork(count: Int = 3) async -> [URL] {
+        guard let group = selectedGroup else { return [] }
+        // `queuePosition` counts from 1, so it is also the place of the next song counted from 0.
+        let next = (try? await player(group).queue(from: selectedStatus.queuePosition, count: count)) ?? []
+        return next.compactMap(\.artworkURL)
+    }
+
     /// Plays the song at `index` in the queue, counted from 0.
     func playFromQueue(_ index: Int) async {
         await performOnSelected {
