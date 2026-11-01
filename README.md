@@ -11,6 +11,8 @@ onder **System → ⚙️**.
   Your top mixes, radiozenders en meer. De ▶ op een hoes speelt meteen af.
 - **Library** toont je playlists, Liked Songs en albums.
 - **Search** zoekt in heel Spotify naar nummers, artiesten, albums en playlists.
+- Swipe naar rechts op een nummer, album of playlist voor **Play Next**, naar links
+  voor **Add to Queue**. Op een hoes: lang indrukken.
 - **System** toont elke kamer met wat er speelt, play/pause en volume.
 - **Now Playing** heeft voortgang, shuffle, herhalen, de wachtrij, een hartje voor
   Liked Songs en "Go to album/artist".
