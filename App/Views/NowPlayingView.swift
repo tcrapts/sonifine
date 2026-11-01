@@ -10,24 +10,16 @@ struct NowPlayingView: View {
     @State private var isLiked: Bool?
     @State private var path: [SpotifyItem] = []
     @State private var showsQueue = false
-    /// How far the finger drags the cover sideways. iOS sets it back to 0 itself
-    /// when it cancels the drag, for instance for the sheet.
-    @GestureState private var dragOffset: CGFloat = 0
-    /// Where the cover is on its own: springing back, or leaving and coming in on a skip.
-    @State private var coverOffset: CGFloat = 0
-    @State private var isSkipping = false
+    @State private var neighbours: (previous: URL?, next: URL?) = (nil, nil)
 
     var body: some View {
         let status = sonos.selectedStatus
         NavigationStack(path: $path) {
             VStack(spacing: 22) {
                 topRow(status)
-                Artwork(url: status.artworkURL, cornerRadius: 14)
-                    .aspectRatio(1, contentMode: .fit)
-                    .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
-                    .offset(x: dragOffset + coverOffset)
-                    .opacity(1 - min(abs(dragOffset + coverOffset) / 600, 0.5))
-                    .gesture(skipBySwiping)
+                CoverStrip(previous: neighbours.previous, current: status.artworkURL, next: neighbours.next) { forward in
+                    if forward { await sonos.next() } else { await sonos.previous() }
+                }
                 titleRow(status)
                 if status.duration > 0 {
                     SongProgress(status: status) { position in Task { await sonos.seek(to: position) } }
@@ -50,46 +42,13 @@ struct NowPlayingView: View {
             .sheet(isPresented: $showsQueue) { QueueView() }
         }
         .modifier(VolumeOverlay())
-        // Whatever happened to a swipe, a new song shows its cover in the middle.
-        .onChange(of: status.spotifyTrack) { if !isSkipping { withAnimation(.spring) { coverOffset = 0 } } }
+        .task(id: "\(status.queuePosition) \(status.spotifyTrack?.description ?? "") \(status.playMode.shuffle)") {
+            neighbours = await sonos.neighbourArtwork()
+        }
         .task(id: status.spotifyTrack) {
             isLiked = nil
             guard let track = status.spotifyTrack else { return }
             isLiked = await catalog.isLiked(track)
-        }
-    }
-
-    /// Swipe the cover left for the next song, right for the previous one, as in Spotify.
-    private var skipBySwiping: some Gesture {
-        DragGesture(minimumDistance: 20)
-            .updating($dragOffset) { drag, offset, _ in
-                // Up and down belong to the sheet, which closes that way.
-                guard !isSkipping, abs(drag.translation.width) > abs(drag.translation.height) else { return }
-                offset = drag.translation.width
-            }
-            .onEnded { drag in
-                guard !isSkipping, abs(drag.translation.width) > abs(drag.translation.height) else { return }
-                // The drag offset goes back to 0 now; the cover keeps its place through `coverOffset`.
-                coverOffset = drag.translation.width
-                let width = drag.predictedEndTranslation.width
-                guard abs(width) > 120 else {
-                    withAnimation(.spring) { coverOffset = 0 }
-                    return
-                }
-                skip(forward: width < 0)
-            }
-    }
-
-    private func skip(forward: Bool) {
-        isSkipping = true
-        Task {
-            defer { isSkipping = false }
-            withAnimation(.easeIn(duration: 0.15)) { coverOffset = forward ? -500 : 500 }
-            if forward { await sonos.next() } else { await sonos.previous() }
-            // The new cover comes in from the other side.
-            coverOffset = forward ? 500 : -500
-            try? await Task.sleep(for: .milliseconds(20))
-            withAnimation(.spring(duration: 0.35)) { coverOffset = 0 }
         }
     }
 
@@ -308,5 +267,81 @@ struct SongProgress: View {
     static func format(_ seconds: TimeInterval) -> String {
         let total = max(0, Int(seconds.rounded()))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// The cover with the previous and next covers beside it, as in Spotify. Drag it
+/// sideways to see a neighbour; swipe far enough and that song plays.
+private struct CoverStrip: View {
+    let previous: URL?
+    let current: URL?
+    let next: URL?
+    /// Skips forward (true) or back, and returns once Sonos plays the new song.
+    let skip: (Bool) async -> Void
+    /// The finger's drag. iOS sets it back to 0 itself when it cancels the drag.
+    @GestureState private var drag: CGFloat = 0
+    /// Where the strip rests between drags: 0, or one cover aside during a skip.
+    @State private var rest: CGFloat = 0
+    @State private var isSkipping = false
+    private let spacing: CGFloat = 20
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            HStack(spacing: spacing) {
+                cover(previous)
+                cover(current)
+                cover(next)
+            }
+            .frame(width: width * 3 + spacing * 2, height: width)
+            .offset(x: -(width + spacing) + drag + rest)
+            .gesture(swipe(width: width))
+        }
+        .aspectRatio(1, contentMode: .fit)
+        // The song changed: the strip, moved one cover aside, now shows that song in
+        // the middle without moving. Set it back without animation.
+        .onChange(of: current) {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { rest = 0 }
+            isSkipping = false
+        }
+    }
+
+    private func cover(_ url: URL?) -> some View {
+        Artwork(url: url, cornerRadius: 14)
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+    }
+
+    private func swipe(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 15)
+            .updating($drag) { value, drag, _ in
+                // Up and down belong to the sheet, which closes that way.
+                guard !isSkipping, abs(value.translation.width) > abs(value.translation.height) else { return }
+                drag = value.translation.width
+            }
+            .onEnded { value in
+                guard !isSkipping, abs(value.translation.width) > abs(value.translation.height) else { return }
+                // The drag goes back to 0 now; `rest` keeps the strip where the finger left it.
+                rest = value.translation.width
+                let predicted = value.predictedEndTranslation.width
+                guard abs(predicted) > width / 3 else {
+                    withAnimation(.spring(duration: 0.3)) { rest = 0 }
+                    return
+                }
+                let forward = predicted < 0
+                isSkipping = true
+                withAnimation(.spring(duration: 0.3)) { rest = forward ? -(width + spacing) : width + spacing }
+                Task {
+                    await skip(forward)
+                    // The new cover ends the skip in `onChange`. If none came (a refused
+                    // skip, or the same album cover), go back to the middle.
+                    try? await Task.sleep(for: .seconds(1))
+                    guard isSkipping else { return }
+                    withAnimation(.spring(duration: 0.3)) { rest = 0 }
+                    isSkipping = false
+                }
+            }
     }
 }

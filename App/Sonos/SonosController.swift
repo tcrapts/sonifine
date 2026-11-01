@@ -255,6 +255,18 @@ final class SonosController {
         return next.compactMap(\.artworkURL)
     }
 
+    /// The covers of the songs before and after the current one in the queue, for
+    /// the cover strip in Now Playing. Shuffle plays in another order, so then both are nil.
+    func neighbourArtwork() async -> (previous: URL?, next: URL?) {
+        let position = selectedStatus.queuePosition  // counted from 1
+        guard let group = selectedGroup, position > 0, !selectedStatus.playMode.shuffle else { return (nil, nil) }
+        let start = max(position - 2, 0)
+        let songs = (try? await player(group).queue(from: start, count: position - start + 1)) ?? []
+        let previous = songs.first { $0.id == position - 2 }
+        let next = songs.first { $0.id == position }
+        return (previous?.artworkURL, next?.artworkURL)
+    }
+
     /// Plays the song at `index` in the queue, counted from 0.
     func playFromQueue(_ index: Int) async {
         await performOnSelected {
