@@ -40,9 +40,22 @@ final class SpotifyWebAPI {
     /// Called when Spotify no longer accepts the sign-in.
     var onSignedOut: () -> Void = {}
 
-    init(transport: @escaping HTTPTransport = HTTP.live, secrets: SecretStore) {
+    private let defaults: UserDefaults?
+
+    /// `defaults` keeps a pause across launches, so a restart doesn't spend the quota again.
+    init(transport: @escaping HTTPTransport = HTTP.live, secrets: SecretStore, defaults: UserDefaults? = nil) {
         self.transport = transport
         self.secrets = secrets
+        self.defaults = defaults
+        if let until = defaults?.object(forKey: "spotifyPausedUntil") as? Date, until > .now {
+            pausedUntil = until
+            isOverQuota = defaults?.bool(forKey: "spotifyOverQuota") ?? false
+        }
+    }
+
+    /// The reason Spotify refuses requests now, if it does; nil when the app may ask.
+    var refusal: String? {
+        Date.now < pausedUntil ? Self.slowDown(until: pausedUntil, quota: isOverQuota).message : nil
     }
 
     var isSignedIn: Bool { secrets.read(Self.refreshTokenKey) != nil }
@@ -317,6 +330,8 @@ final class SpotifyWebAPI {
             pausedUntil = Date.now.addingTimeInterval(quota ? 60 * 60 : pause)
             pause = min(pause * 2, 30 * 60)
             isOverQuota = quota
+            defaults?.set(pausedUntil, forKey: "spotifyPausedUntil")
+            defaults?.set(quota, forKey: "spotifyOverQuota")
             throw Self.slowDown(until: pausedUntil, quota: quota)
         }
         pause = 60

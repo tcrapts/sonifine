@@ -40,6 +40,7 @@ final class SpotifyCatalog {
         if isSignedIn || isLinked, let saved = Self.savedLibrary() {
             (library, libraryAsked) = saved
         }
+        podcastsMessage = webAPI.refusal
         webAPI.onSignedOut = { [weak self] in self?.signedOut() }
     }
 
@@ -124,7 +125,10 @@ final class SpotifyCatalog {
     /// The library comes from the link when there is one: it has no small quota. The
     /// Web API adds what only it has, such as podcasts and recently played, when it can.
     private func loadLibrary(force: Bool) async {
-        guard isSignedIn || isLinked, force || Date.now.timeIntervalSince(libraryAsked) > 6 * 60 * 60 else { return }
+        guard isSignedIn || isLinked, force || Date.now.timeIntervalSince(libraryAsked) > 6 * 60 * 60 else {
+            await loadMissingPodcasts()
+            return
+        }
         let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
         var loaded = library
         var failure: Error?
@@ -289,6 +293,24 @@ final class SpotifyCatalog {
         } catch {
             report(error)
             return false
+        }
+    }
+
+    /// The stored library may lack the podcasts because Spotify refused them: ask
+    /// again once a pause is over, else say why they are missing.
+    private func loadMissingPodcasts() async {
+        guard isSignedIn, isLinked, library.shows.isEmpty else { return }
+        if let refusal = webAPI.refusal {
+            podcastsMessage = refusal
+            return
+        }
+        do {
+            (library.shows, library.recentlyPlayed, library.jumpBackIn) =
+                try await webAPI.extras(known: library.playlists + library.albums)
+            podcastsMessage = nil
+            Self.save(library)
+        } catch {
+            if !HTTP.isCancellation(error) { podcastsMessage = error.localizedDescription }
         }
     }
 

@@ -59,7 +59,14 @@ struct LibraryPageView: View {
         switch page {
         case .playlists: list("Playlists", library.playlists, orderKey: "playlistsOrder", sortKeys: [.custom, .title, .added])
         case .albums: list("Albums", library.albums, orderKey: "albumsOrder", sortKeys: [.custom, .title, .artist, .added])
-        case .podcasts: list("Podcasts", library.shows, orderKey: "podcastsOrder", sortKeys: [.custom, .title, .added])
+        case .podcasts:
+            list("Podcasts", library.shows, orderKey: "podcastsOrder", sortKeys: [.custom, .title, .added])
+                .overlay {
+                    if library.shows.isEmpty, let message = catalog.podcastsMessage {
+                        ContentUnavailableView("Podcasts didn't load", systemImage: "exclamationmark.triangle",
+                                               description: Text(message))
+                    }
+                }
         case .likedSongs: likedSongs(library.likedSongs)
         }
     }

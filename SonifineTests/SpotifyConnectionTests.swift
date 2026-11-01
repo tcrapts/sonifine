@@ -161,6 +161,24 @@ struct SpotifyWebAPITests {
         #expect(recorded.requests.count == sent, "the pause keeps Spotify's limit from growing")
     }
 
+    @Test func aUsedUpQuotaStillHoldsAfterARestart() async {
+        let defaults = UserDefaults(suiteName: "SpotifyWebAPITests-\(UUID())")!
+        secrets.values["spotifyRefreshToken"] = "R1"
+        let before = SpotifyWebAPI(transport: recorded.transport, secrets: secrets, defaults: defaults)
+        recorded.answer((200, token), when: isTokenRequest)
+        recorded.answer((429, #"{"error":{"status":429,"message":"Too many requests","reason":"QUOTA_EXCEEDED"}}"#)) {
+            $0.url?.path() == "/v1/me/shows"
+        }
+        _ = try? await before.extras(known: [])
+        let sent = recorded.requests.count
+
+        let after = SpotifyWebAPI(transport: recorded.transport, secrets: secrets, defaults: defaults)
+
+        #expect(after.refusal?.contains("quota for this app is used up") == true)
+        await #expect(throws: AppError.self) { try await after.extras(known: []) }
+        #expect(recorded.requests.count == sent, "nothing goes out during the pause")
+    }
+
     @Test func aRefusedRefreshSignsOut() async {
         let api = api()
         var signedOut = false

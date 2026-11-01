@@ -14,7 +14,7 @@ struct SonifineApp: App {
         let secrets = KeychainStore()
         _sonos = State(initialValue: sonos)
         _catalog = State(initialValue: SpotifyCatalog(
-            webAPI: SpotifyWebAPI(secrets: secrets),
+            webAPI: SpotifyWebAPI(secrets: secrets, defaults: .standard),
             sonosService: SonosSpotifyService(secrets: secrets),
             household: { await sonos.household() }))
         _nowPlaying = State(initialValue: NowPlayingSession(commands: .init(
