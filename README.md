@@ -50,4 +50,18 @@ make device   # bouwt en installeert op de iPhone
 make help     # toont alle targets
 ```
 
-Meer in [docs/development.md](docs/development.md).
+## Op je iPhone zetten
+
+Na een wijziging zet je de app zo op je iPhone:
+
+1. Ontgrendel je iPhone en zorg dat hij op dezelfde wifi zit als de Mac (of aan de kabel).
+2. Draai `make device`. Je logins blijven bewaard.
+
+De eerste keer op een nieuwe Mac of iPhone zijn er een paar stappen meer: je
+Apple-account in Xcode, de iPhone één keer koppelen via de kabel met
+Developer Mode aan, en de ontwikkelaar vertrouwen op de iPhone. Die staan, met
+oplossingen voor de bekende foutmeldingen, in
+[docs/development.md](docs/development.md#install-on-the-iphone).
+
+Met een gratis Apple-account start de app na zeven dagen niet meer; draai dan
+opnieuw `make device`.
