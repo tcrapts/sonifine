@@ -266,6 +266,20 @@ struct RadioStatusTests {
         #expect(status.radioAccount == RadioAccount(accountNumber: "7"))
     }
 
+    @Test func aLiveStreamShowsTheStationNotItsFileName() throws {
+        let stream = try #require(station("tunein:4345", "BNR Nieuwsradio").stream(account: RadioAccount(accountNumber: "2")))
+        // As the Symfonisk reported BNR: the title is the end of the stream's address.
+        let track = """
+        <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/"         xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true">        <res protocolInfo="aac:*:application/octet-stream:*">aac://https://27823.live.streamtheworld.com:443/        BNR_NIEUWSRADIOAAC.aac?dist=tunein&amp;DIST=TuneIn&amp;TGT=TuneIn</res><r:streamContent></r:streamContent>        <dc:title>BNR_NIEUWSRADIOAAC.aac?dist=tunein&amp;DIST=TuneIn&amp;TGT=TuneIn</dc:title></item></DIDL-Lite>
+        """
+        let status = status(media: soapAnswer("GetMediaInfo", """
+            <NrTracks>1</NrTracks><CurrentURI>\(xmlEscaped(stream.uri))</CurrentURI>\
+            <CurrentURIMetaData>\(xmlEscaped(stream.metadata))</CurrentURIMetaData>
+            """), trackMetadata: track)
+
+        #expect(status.displayTitle == "BNR Nieuwsradio")
+    }
+
     @Test func theQueueIsNoRadio() {
         // Recorded from the Symfonisk while it played Spotify.
         let status = status(media: """

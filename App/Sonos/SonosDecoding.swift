@@ -88,8 +88,11 @@ extension GroupStatus {
         let track = position.value("TrackMetaData").flatMap { XMLNode.parse($0) }
         let state = transport.value("CurrentTransportState")
         // Radio puts the station in the title and the song in `streamContent`.
-        let stream = track?.value("streamContent")
-        let title = track?.value("title").flatMap { $0.hasPrefix("x-") ? nil : $0 }
+        let stream = track?.value("streamContent").flatMap { $0.isEmpty ? nil : $0 }
+        // A live stream may carry its file name as the title, such as
+        // `BNR_NIEUWSRADIOAAC.aac?dist=tunein&…`, which is part of its address: leave it out.
+        let address = track?.value("res") ?? ""
+        let title = track?.value("title").flatMap { $0.hasPrefix("x-") || address.contains($0) ? nil : $0 }
 
         self.init(
             volume: volume.value("CurrentVolume").flatMap(Int.init) ?? 0,
