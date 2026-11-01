@@ -9,10 +9,15 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
 - **Home** shows your Spotify home page: Jump back in, Daily Mix, Release Radar,
   Your top mixes, radio stations and more. The ▶ on a cover plays it at once.
 - **Library** shows your playlists, all your Liked Songs, your albums and the
-  podcasts you follow. With ↑↓
-  at the top right you sort Liked Songs and playlists by title, artist, album or
-  **Recently added**; choose the same key again for the other direction. Play and
-  Shuffle follow that order.
+  podcasts you follow.
+- Every list works the same way: the library pages, a playlist, album or artist,
+  a podcast's episodes and the Sonos Radio categories. Pull down for a search
+  field that filters as you type, on title, artist and album, whatever the case
+  or accents. With ↑↓ at the top right you sort by title, artist, album,
+  **Recently added** or **Release date**, as far as the list has them; choose
+  the same key again for the other direction. Each kind of list remembers its
+  sort. A list that mixes kinds, such as stations and categories, has filter
+  chips. Play, Shuffle and a tapped song play the songs as the list shows them.
 - At the top of Home you choose **Spotify** or **Sonos Radio**. Sonos Radio shows
   Dutch radio first (NPO, Qmusic, 538, Sky Radio and more), then its rows of
   stations, then Music, News & Talk, Sports and Locations to browse.

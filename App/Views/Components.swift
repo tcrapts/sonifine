@@ -399,34 +399,6 @@ private struct SafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }
 
-/// Spotify's sort choice for a list of songs: choose a key, and choose it again
-/// to turn the direction. The arrow shows the direction of the chosen key.
-struct SortMenu: View {
-    @Binding var order: SongOrder
-    let keys: [SongOrder.Key]
-
-    var body: some View {
-        Menu {
-            Section("Sort by") {
-                ForEach(keys, id: \.self) { key in
-                    Button {
-                        order = order.choosing(key)
-                    } label: {
-                        if key == order.key, key != .custom {
-                            Label(key.label, systemImage: order.ascending ? "arrow.up" : "arrow.down")
-                        } else {
-                            Text(key.label)
-                        }
-                    }
-                }
-            }
-        } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
-        }
-        .menuActionDismissBehavior(.disabled)
-    }
-}
-
 /// One line of text that scrolls sideways when it doesn't fit, as titles do in
 /// Spotify: it waits, scrolls one round, and starts again.
 struct MarqueeText: View {

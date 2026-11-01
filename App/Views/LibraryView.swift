@@ -42,7 +42,7 @@ struct LibraryView: View {
     }
 }
 
-/// The playlists, Liked Songs, albums or podcasts of the library.
+/// The playlists, Liked Songs, albums or podcasts of the library, each in an `ItemList`.
 struct LibraryPageView: View {
     let page: LibraryPage
     @Environment(SpotifyCatalog.self) private var catalog
@@ -51,40 +51,30 @@ struct LibraryPageView: View {
     var body: some View {
         let library = catalog.library
         switch page {
-        case .playlists: list("Playlists", library.playlists)
-        case .albums: list("Albums", library.albums)
-        case .podcasts: list("Podcasts", library.shows)
-        case .likedSongs: LikedSongsView()
+        case .playlists: list("Playlists", library.playlists, orderKey: "playlistsOrder", sortKeys: [.custom, .title, .added])
+        case .albums: list("Albums", library.albums, orderKey: "albumsOrder", sortKeys: [.custom, .title, .artist, .added])
+        case .podcasts: list("Podcasts", library.shows, orderKey: "podcastsOrder", sortKeys: [.custom, .title, .added])
+        case .likedSongs: likedSongs(library.likedSongs)
         }
     }
 
-    private func list(_ title: String, _ items: [SpotifyItem]) -> some View {
-        List(items) { item in ItemRow(item: item) { play(.tap(item, in: items)) } }
-            .navigationTitle(title)
+    private func list(_ title: String, _ items: [SpotifyItem], orderKey: String, sortKeys: [ListOrder.Key]) -> some View {
+        ItemList(title, items: items, orderKey: orderKey, sortKeys: sortKeys) { item, shown in
+            ItemRow(item: item) { play(.tap(item, in: shown.items)) }
+        }
     }
 
-}
-
-/// Every liked song, sorted as the user chose; Play and Shuffle follow that order.
-private struct LikedSongsView: View {
-    @Environment(SpotifyCatalog.self) private var catalog
-    @Environment(\.play) private var play
-    @AppStorage("likedSongsOrder") private var order = SongOrder.newestFirst
-
-    var body: some View {
-        let songs = order.apply(to: catalog.library.likedSongs)
-        List {
-            Section {
-                PlayButtons(play: { play(.songs(songs.map(\.uri), start: 0, shuffle: false)) },
-                            shuffle: { play(.songs(songs.map(\.uri), start: 0, shuffle: true)) })
+    /// Every liked song, newest first unless the user chose otherwise; Play and
+    /// Shuffle follow the songs shown.
+    private func likedSongs(_ songs: [SpotifyItem]) -> some View {
+        ItemList("Liked Songs", items: songs, orderKey: "likedSongsOrder", defaultOrder: .newestFirst,
+                 sortKeys: [.title, .artist, .album, .added]) { shown in
+            ListHeader(item: nil) {
+                PlayButtons(play: { play(.songs(shown.items.map(\.uri), start: 0, shuffle: false)) },
+                            shuffle: { play(.songs(shown.items.map(\.uri), start: 0, shuffle: true)) })
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-            ForEach(songs) { song in
-                ItemRow(item: song) { play(.tap(song, in: songs)) }
-            }
+        } row: { song, shown in
+            ItemRow(item: song) { play(.tap(song, in: shown.items)) }
         }
-        .navigationTitle("Liked Songs")
-        .toolbar { SortMenu(order: $order, keys: [.title, .artist, .album, .added]) }
     }
 }

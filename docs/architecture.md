@@ -134,5 +134,15 @@ background the silence stops ten minutes after the Sonos pauses (`KeepAwake`).
 through a value (`SpotifyItem`, `LibraryPage`, `RadioPage`) and `spotifyDestinations()`,
 which opens a podcast in `ShowView` and other Spotify items in `DetailView`;
 mixing in destination links breaks value navigation in pushed screens.
+
+Every list of items is an `ItemList` (`App/Views/ItemList.swift`): the library
+pages, `DetailView`, `ShowView` and the Sonos Radio categories. It holds the
+search field, the `SortMenu`, `FilterChips` when the items are of two kinds or
+more, and the rows the page gives it, under an optional `ListHeader`.
+`ListQuery` (`App/Spotify/ListOrder.swift`) decides what shows: search text,
+kind and `ListOrder`, over anything `Listable`. The sort choice is kept in
+`UserDefaults`, one key per kind of list. The header and rows get the items as
+shown; once a list is searched, filtered or sorted, a song plays with those
+songs instead of inside its playlist.
 The room settings open the same way, through a `SonosRoom`: the slider button on
 a room card on the System tab, or **Rooms** in the ⚙️ sheet.

@@ -18,22 +18,7 @@ struct SearchView: View {
         let results = catalog.searchResults
         List {
             if !query.isEmpty {
-                // Chips that scroll sideways, as in Spotify, so every filter keeps its full name.
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(Filter.allCases) { option in
-                            Button(option.rawValue) { filter = option }
-                                .font(.subheadline.weight(.medium))
-                                .buttonStyle(GlassChip(isSelected: filter == option))
-                                .accessibilityAddTraits(filter == option ? .isSelected : [])
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-                .scrollIndicators(.hidden)
-                .scrollClipDisabled()
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+                FilterChips(options: Filter.allCases, selection: $filter) { $0.rawValue }
             }
             switch filter {
             case .all:

@@ -50,25 +50,18 @@ private struct RadioHomeView: View {
     }
 }
 
-/// The stations and categories in a category, such as a genre or a country.
+/// The stations and categories in a category, such as a genre or a country, in an `ItemList`.
 private struct RadioCategoryView: View {
     let category: RadioItem
     @Environment(RadioCatalog.self) private var radio
     @State private var items: [RadioItem]?
 
     var body: some View {
-        List(items ?? []) { RadioRow(item: $0) }
-            .listStyle(.plain)
-            .overlay {
-                if items == nil {
-                    ProgressView()
-                } else if items?.isEmpty == true {
-                    ContentUnavailableView("No stations", systemImage: "dot.radiowaves.left.and.right",
-                                           description: Text(radio.errorMessage ?? ""))
-                }
-            }
-            .navigationTitle(category.name)
-            .task { if items == nil { items = await radio.items(in: category) } }
+        ItemList(category.name, items: items, orderKey: "radioOrder", sortKeys: [.custom, .title],
+                 message: items?.isEmpty == true ? radio.errorMessage : nil) { item, _ in
+            RadioRow(item: item)
+        }
+        .task { if items == nil { items = await radio.items(in: category) } }
     }
 }
 

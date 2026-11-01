@@ -129,18 +129,19 @@ final class SonosSpotifyService {
 
     /// Songs, albums, artists and playlists that match `term`, ten of each.
     func search(_ term: String, household: Household) async throws -> SpotifySearchResults {
-        func find(_ category: String) async throws -> [SpotifyItem] {
-            let response = try await withFreshKey(household: household) { _ in
-                try await self.call("search", "<id>\(category)</id><term>\(term.xmlEscaped)</term><index>0</index><count>10</count>",
-                                    household: household, signedIn: true)
-            }
-            return Self.items(in: response)
-        }
-        async let tracks = find("track")
-        async let artists = find("artist")
-        async let albums = find("album")
-        async let playlists = find("playlist")
+        async let tracks = find(term, in: "track", household: household)
+        async let artists = find(term, in: "artist", household: household)
+        async let albums = find(term, in: "album", household: household)
+        async let playlists = find(term, in: "playlist", household: household)
         return try await SpotifySearchResults(tracks: tracks, artists: artists, albums: albums, playlists: playlists)
+    }
+
+    private func find(_ term: String, in category: String, household: Household) async throws -> [SpotifyItem] {
+        let response = try await withFreshKey(household: household) { _ in
+            try await self.call("search", "<id>\(category)</id><term>\(term.xmlEscaped)</term><index>0</index><count>10</count>",
+                                household: household, signedIn: true)
+        }
+        return Self.items(in: response)
     }
 
     /// Everything in one of the link's lists, page by page, up to `limit`.
