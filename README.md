@@ -16,6 +16,9 @@ onder **System → ⚙️**.
 - Swipe naar rechts op een nummer, album of playlist voor **Play Next**, naar links
   voor **Add to Queue**. Op een hoes: lang indrukken.
 - **System** toont elke kamer met wat er speelt, play/pause en volume.
+- De schuifknop op een kamer (of **System → ⚙️ → Rooms**) toont het geluid van
+  die kamer: bass, treble, loudness, Trueplay en **Reset to default**. Daaronder
+  staan de speakers met model, ID, serienummer, versies en IP-adres.
 - **Now Playing** heeft voortgang, shuffle, herhalen, de wachtrij, een hartje voor
   Liked Songs en "Go to album/artist".
 - De volumeknoppen werken als de app open is, en ook op het vergrendelscherm en in

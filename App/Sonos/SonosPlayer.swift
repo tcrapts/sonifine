@@ -1,7 +1,8 @@
 import Foundation
 
 /// One Sonos player on the network, in domain terms. Group operations go to a
-/// coordinator; `zoneGroups()` and `householdID()` work on any player.
+/// coordinator; `zoneGroups()` and `householdID()` work on any player; the
+/// sound settings and the device belong to the player of one room.
 ///
 /// `SOAPSonosPlayer` talks to a real player; tests use a fake.
 @MainActor
@@ -30,6 +31,11 @@ protocol SonosPlayer {
     /// Play Next, or at the end. Returns the number of songs added.
     func addToQueue(_ items: [SonosQueueItem], after current: Int?) async throws -> Int
     func queue() async throws -> [QueueEntry]
+
+    /// Bass, treble, loudness and Trueplay of this player's room.
+    func soundSettings() async throws -> SoundSettings
+    func change(_ setting: SoundSetting) async throws
+    func device() async throws -> SonosDevice
 }
 
 /// Talks UPnP SOAP to port 1400 of a player.
@@ -132,6 +138,35 @@ final class SOAPSonosPlayer: SonosPlayer {
         return QueueEntry.entries(fromDIDL: response.value("Result") ?? "", player: address)
     }
 
+    func soundSettings() async throws -> SoundSettings {
+        async let bass = call(.renderingControl, "GetBass")
+        async let treble = call(.renderingControl, "GetTreble")
+        async let loudness = call(.renderingControl, "GetLoudness", ["InstanceID": "0", "Channel": "Master"])
+        async let calibration = call(.renderingControl, "GetRoomCalibrationStatus")
+        return try await SoundSettings(bass: bass, treble: treble, loudness: loudness, calibration: try? calibration)
+    }
+
+    func change(_ setting: SoundSetting) async throws {
+        switch setting {
+        case .bass(let value):
+            _ = try await call(.renderingControl, "SetBass", ["InstanceID": "0", "DesiredBass": String(value)])
+        case .treble(let value):
+            _ = try await call(.renderingControl, "SetTreble", ["InstanceID": "0", "DesiredTreble": String(value)])
+        case .loudness(let on):
+            _ = try await call(.renderingControl, "SetLoudness",
+                               ["InstanceID": "0", "Channel": "Master", "DesiredLoudness": on ? "1" : "0"])
+        }
+    }
+
+    func device() async throws -> SonosDevice {
+        let request = URLRequest(url: address.appending(path: "/xml/device_description.xml"), timeoutInterval: 4)
+        let (data, status) = try await transport(request)
+        guard status == 200, let description = XMLNode.parse(data) else {
+            throw AppError("\(address.host() ?? "The speaker") gave no device description.")
+        }
+        return SonosDevice(description: description, address: address)
+    }
+
     // MARK: SOAP
 
     private func call(_ service: Service, _ action: String,
@@ -169,7 +204,7 @@ final class SOAPSonosPlayer: SonosPlayer {
 
     /// The UPnP services of a player that the app uses.
     private enum Service {
-        case avTransport, contentDirectory, deviceProperties, groupRenderingControl, zoneGroupTopology
+        case avTransport, contentDirectory, deviceProperties, groupRenderingControl, renderingControl, zoneGroupTopology
 
         var path: String {
             switch self {
@@ -177,6 +212,7 @@ final class SOAPSonosPlayer: SonosPlayer {
             case .contentDirectory: "/MediaServer/ContentDirectory/Control"
             case .deviceProperties: "/DeviceProperties/Control"
             case .groupRenderingControl: "/MediaRenderer/GroupRenderingControl/Control"
+            case .renderingControl: "/MediaRenderer/RenderingControl/Control"
             case .zoneGroupTopology: "/ZoneGroupTopology/Control"
             }
         }
@@ -187,6 +223,7 @@ final class SOAPSonosPlayer: SonosPlayer {
             case .contentDirectory: "urn:schemas-upnp-org:service:ContentDirectory:1"
             case .deviceProperties: "urn:schemas-upnp-org:service:DeviceProperties:1"
             case .groupRenderingControl: "urn:schemas-upnp-org:service:GroupRenderingControl:1"
+            case .renderingControl: "urn:schemas-upnp-org:service:RenderingControl:1"
             case .zoneGroupTopology: "urn:schemas-upnp-org:service:ZoneGroupTopology:1"
             }
         }

@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Every room with what it plays, play/pause and volume. Tap a room to play there.
+/// Every room with what it plays, play/pause and volume. Tap a room to play there;
+/// its slider button opens the sound and devices of the room.
 struct SystemView: View {
     @Environment(SonosController.self) private var sonos
     @State private var showsSettings = false
@@ -26,6 +27,7 @@ struct SystemView: View {
                     .accessibilityLabel("Settings")
             }
         }
+        .navigationDestination(for: SonosRoom.self) { RoomSettingsView(room: $0) }
         .sheet(isPresented: $showsSettings) { SettingsView() }
         .refreshable { await sonos.loadGroups() }
     }
@@ -39,7 +41,11 @@ private struct RoomCard: View {
         let status = sonos.statuses[group.id] ?? GroupStatus()
         let isSelected = group.id == sonos.selectedGroup?.id
         VStack(alignment: .leading, spacing: 10) {
-            Text(group.name).font(.headline)
+            HStack {
+                Text(group.name).font(.headline)
+                Spacer()
+                roomSettingsLink
+            }
             HStack(spacing: 12) {
                 Artwork(url: status.artworkURL).frame(width: 52, height: 52)
                 VStack(alignment: .leading, spacing: 2) {
@@ -66,6 +72,22 @@ private struct RoomCard: View {
         }
         .contentShape(.rect)
         .onTapGesture { sonos.select(group) }
+    }
+
+    /// Opens the sound and devices of the room; a group of several rooms asks which.
+    @ViewBuilder private var roomSettingsLink: some View {
+        let label = Image(systemName: "slider.horizontal.3").font(.title3).frame(width: 44, height: 28)
+        if group.rooms.count == 1, let room = group.rooms.first {
+            NavigationLink(value: room) { label }
+                .tint(.primary)
+                .accessibilityLabel("Sound and devices of \(room.name)")
+        } else {
+            Menu {
+                ForEach(group.rooms) { room in NavigationLink(room.name, value: room) }
+            } label: { label }
+                .tint(.primary)
+                .accessibilityLabel("Sound and devices of a room")
+        }
     }
 }
 
@@ -103,8 +125,16 @@ struct SettingsView: View {
                         SpotifySignIn()
                     }
                 }
+                Section {
+                    ForEach(sonos.rooms) { room in NavigationLink(room.name, value: room) }
+                } header: {
+                    Text("Rooms")
+                } footer: {
+                    Text("Bass, treble, loudness and Trueplay of each room, and its speakers.")
+                }
             }
             .navigationTitle("Settings")
+            .navigationDestination(for: SonosRoom.self) { RoomSettingsView(room: $0) }
             .toolbar { Button("Done") { dismiss() } }
         }
         // This sheet would hide the app's own link page, so it shows its own.

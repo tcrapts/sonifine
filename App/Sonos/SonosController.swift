@@ -355,6 +355,46 @@ final class SonosController {
         }
     }
 
+    // MARK: Rooms
+
+    /// Every room of every group, in the order of the groups.
+    var rooms: [SonosRoom] { groups.flatMap(\.rooms) }
+
+    /// The sound settings of a room, read from its own player.
+    func soundSettings(of room: SonosRoom) async -> SoundSettings? {
+        do {
+            let settings = try await makePlayer(room.address).soundSettings()
+            actionError = nil
+            return settings
+        } catch {
+            actionError = "Couldn't read the sound of \(room.name): \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    /// Sends sound settings to a room, in order. Returns false when the player refused one.
+    @discardableResult
+    func change(_ settings: [SoundSetting], of room: SonosRoom) async -> Bool {
+        let player = makePlayer(room.address)
+        do {
+            for setting in settings { try await player.change(setting) }
+            actionError = nil
+            return true
+        } catch {
+            actionError = "Couldn't change the sound of \(room.name): \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// The players in a room, as they describe themselves. A player that doesn't answer is left out.
+    func devices(in room: SonosRoom) async -> [SonosDevice] {
+        var devices: [SonosDevice] = []
+        for address in room.devices {
+            if let device = try? await makePlayer(address).device() { devices.append(device) }
+        }
+        return devices
+    }
+
     // MARK: Helpers
 
     private func player(_ group: SonosGroup) -> SonosPlayer { makePlayer(group.coordinator) }

@@ -31,6 +31,31 @@ struct SonosDecodingTests {
         #expect(groups[1].roomIDs == ["RINCON_K", "RINCON_L"])
     }
 
+    @Test func eachRoomKeepsItsOwnPlayerAndItsSpeakers() {
+        // Kitchen leads Living Room, which has a Sub; Bedroom is a stereo pair.
+        let state = """
+        <ZoneGroupState><ZoneGroups>\
+        <ZoneGroup Coordinator="RINCON_K" ID="RINCON_K:1">\
+        <ZoneGroupMember UUID="RINCON_L" Location="http://10.0.0.3:1400/xml/device_description.xml" ZoneName="Living Room">\
+        <Satellite UUID="RINCON_SUB" Location="http://10.0.0.7:1400/xml/device_description.xml" \
+        ZoneName="Living Room" Invisible="1"/></ZoneGroupMember>\
+        <ZoneGroupMember UUID="RINCON_K" Location="http://10.0.0.2:1400/xml/device_description.xml" ZoneName="Kitchen"/>\
+        </ZoneGroup>\
+        <ZoneGroup Coordinator="RINCON_B1" ID="RINCON_B1:2">\
+        <ZoneGroupMember UUID="RINCON_B1" Location="http://10.0.0.4:1400/xml/device_description.xml" ZoneName="Bedroom"/>\
+        <ZoneGroupMember UUID="RINCON_B2" Location="http://10.0.0.5:1400/xml/device_description.xml" \
+        ZoneName="Bedroom" Invisible="1"/>\
+        </ZoneGroup></ZoneGroups></ZoneGroupState>
+        """
+        let groups = SonosGroup.groups(fromZoneGroupState: state)
+        let address = { (last: Int) in URL(string: "http://10.0.0.\(last):1400")! }
+
+        #expect(groups[1].rooms.map(\.name) == ["Kitchen", "Living Room"], "the coordinator comes first")
+        #expect(groups[1].rooms[1].address == address(3))
+        #expect(groups[1].rooms[1].devices == [address(3), address(7)])
+        #expect(groups[0].rooms.map(\.devices) == [[address(4), address(5)]])
+    }
+
     @Test func spotifySongStatusShowsTheSongAndItsAccount() {
         let metadata = """
         <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" \

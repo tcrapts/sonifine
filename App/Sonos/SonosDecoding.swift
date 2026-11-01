@@ -14,17 +14,62 @@ extension SonosGroup {
             guard let coordinatorID = zoneGroup.attributes["Coordinator"],
                   let coordinator = visible.first(where: { $0.attributes["UUID"] == coordinatorID }),
                   let roomName = coordinator.attributes["ZoneName"],
-                  let address = coordinator.attributes["Location"].flatMap(URL.init(string:))?.sonosPlayerURL
+                  let address = coordinator.sonosAddress
             else { return nil }
             // A stereo pair is two players with one room name.
             let otherRooms = Set(visible.compactMap { $0.attributes["ZoneName"] }).subtracting([roomName])
+            let rooms = ([coordinator] + visible.filter { $0.attributes["UUID"] != coordinatorID })
+                .compactMap { room(of: $0, among: members) }
             return SonosGroup(
                 id: coordinatorID,
                 name: otherRooms.isEmpty ? roomName : "\(roomName) + \(otherRooms.count)",
                 coordinator: address,
-                roomIDs: visible.compactMap { $0.attributes["UUID"] })
+                rooms: rooms)
         }
         return groups.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// A visible member as a room, with the invisible players that share its
+    /// name (a stereo partner) and its satellites (a Sub, surrounds).
+    private static func room(of member: XMLNode, among members: [XMLNode]) -> SonosRoom? {
+        guard let id = member.attributes["UUID"], let name = member.attributes["ZoneName"],
+              let address = member.sonosAddress else { return nil }
+        let partners = members.filter { $0.attributes["Invisible"] == "1" && $0.attributes["ZoneName"] == name }
+        let satellites = member.children.filter { $0.name == "Satellite" }
+        return SonosRoom(id: id, name: name, address: address,
+                         devices: [address] + (partners + satellites).compactMap(\.sonosAddress))
+    }
+}
+
+private extension XMLNode {
+    /// The player address in the `Location` of a zone group member.
+    var sonosAddress: URL? { attributes["Location"].flatMap(URL.init(string:))?.sonosPlayerURL }
+}
+
+extension SoundSettings {
+    /// The settings from the answers to `GetBass`, `GetTreble`, `GetLoudness`
+    /// and `GetRoomCalibrationStatus`.
+    init(bass: XMLNode, treble: XMLNode, loudness: XMLNode, calibration: XMLNode?) {
+        self.init(bass: bass.value("CurrentBass").flatMap(Int.init) ?? 0,
+                  treble: treble.value("CurrentTreble").flatMap(Int.init) ?? 0,
+                  loudness: loudness.value("CurrentLoudness") == "1",
+                  trueplay: calibration?.value("RoomCalibrationEnabled").map { $0 == "1" })
+    }
+}
+
+extension SonosDevice {
+    /// The device from `/xml/device_description.xml` of the player at `address`.
+    init(description: XMLNode, address: URL) {
+        let device = description.first("device")
+        func value(_ name: String) -> String { device?.children.first { $0.name == name }?.text ?? "" }
+        let udn = value("UDN")
+        self.init(id: udn.hasPrefix("uuid:") ? String(udn.dropFirst(5)) : udn,
+                  name: value("displayName"),
+                  model: value("modelNumber"),
+                  serialNumber: value("serialNum"),
+                  softwareVersion: value("softwareVersion"),
+                  hardwareVersion: value("hardwareVersion"),
+                  ipAddress: address.host() ?? "")
     }
 }
 

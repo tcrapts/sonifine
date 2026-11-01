@@ -30,6 +30,14 @@ and encodes it for the Sonos queue.
 - **Status.** `refresh()` reads the status of every group every three seconds
   and after each action: volume, transport state, position, play mode and the
   track metadata.
+- **Room sound and devices.** Bass, treble, loudness and Trueplay belong to a
+  room, so they go to the room's own player:
+  `RenderingControl` `GetBass`/`SetBass`, `GetTreble`/`SetTreble`,
+  `GetLoudness`/`SetLoudness` (channel `Master`) and `GetRoomCalibrationStatus`
+  (`RoomCalibrationEnabled` is Trueplay). Each `SonosRoom` in `SonosGroup.rooms`
+  keeps its player address and the players in it (a stereo partner, a Sub,
+  surrounds); `/xml/device_description.xml` of each describes the device.
+  `RoomSettingsView` shows them; a slider sends its value when released.
 - **Volume.** Presses add up in `pendingAdjustment`; one
   `SnapshotGroupVolume` + `SetRelativeGroupVolume` request carries them, so a
   held button sends few requests.
@@ -89,3 +97,5 @@ background the silence stops ten minutes after the Sonos pauses (`KeepAwake`).
 `NavigationStack` with the mini-player above the tab bar. Every screen opens
 through a value (`SpotifyItem`, `LibraryPage`) and `spotifyDestinations()`;
 mixing in destination links breaks value navigation in pushed screens.
+The room settings open the same way, through a `SonosRoom`: the slider button on
+a room card on the System tab, or **Rooms** in the ⚙️ sheet.

@@ -69,6 +69,14 @@ func song(_ id: String, _ name: String = "Song") -> SpotifyItem {
     SpotifyItem(uri: SpotifyURI("spotify:track:\(id)")!, name: name, subtitle: "", imageURL: nil)
 }
 
+extension SonosGroup {
+    /// A group whose rooms all play from `coordinator`, named after their IDs.
+    init(id: String, name: String, coordinator: URL, roomIDs: [String]) {
+        self.init(id: id, name: name, coordinator: coordinator,
+                  rooms: roomIDs.map { SonosRoom(id: $0, name: $0, address: coordinator, devices: [coordinator]) })
+    }
+}
+
 /// A Sonos player that keeps what the controller asks of it.
 @MainActor
 final class FakeSonosPlayer: SonosPlayer {
@@ -79,6 +87,8 @@ final class FakeSonosPlayer: SonosPlayer {
     var failure: AppError?
     /// How long `status()` takes, to let a user action overtake a poll.
     var statusDelay: Duration = .zero
+    var sound = SoundSettings()
+    var description: SonosDevice?
 
     private(set) var adjustments: [Int] = []
     private(set) var queuedItems: [SonosQueueItem] = []
@@ -125,4 +135,16 @@ final class FakeSonosPlayer: SonosPlayer {
     }
 
     func queue() async throws -> [QueueEntry] { queueEntries }
+
+    func soundSettings() async throws -> SoundSettings { sound }
+
+    func change(_ setting: SoundSetting) async throws {
+        if let failure { throw failure }
+        sound.apply(setting)
+    }
+
+    func device() async throws -> SonosDevice {
+        guard let description else { throw AppError("No answer") }
+        return description
+    }
 }

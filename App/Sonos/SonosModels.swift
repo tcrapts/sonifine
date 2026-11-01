@@ -8,8 +8,65 @@ struct SonosGroup: Identifiable, Hashable {
     /// The coordinator's room, plus the count of the other rooms: `Kitchen + 2`.
     let name: String
     let coordinator: URL
-    /// The UUIDs of every visible room in the group, the coordinator included.
-    let roomIDs: [String]
+    /// Every visible room in the group, the coordinator first.
+    let rooms: [SonosRoom]
+
+    var roomIDs: [String] { rooms.map(\.id) }
+}
+
+/// One room of a group. Its sound settings go to its own player, never to the coordinator.
+struct SonosRoom: Identifiable, Hashable {
+    /// The UUID of the room's player, such as `RINCON_000E58A0B1C201400`.
+    let id: String
+    let name: String
+    /// The room's player, which holds its sound settings.
+    let address: URL
+    /// Every player in the room: the room's own, a stereo partner, a Sub and surrounds.
+    let devices: [URL]
+}
+
+/// The sound of one room, from its `RenderingControl`.
+struct SoundSettings: Equatable {
+    /// −10…10, 0 is flat.
+    var bass = 0
+    /// −10…10, 0 is flat.
+    var treble = 0
+    var loudness = true
+    /// Whether Trueplay tuning is on; nil when the player doesn't say.
+    var trueplay: Bool?
+
+    static let range = -10...10
+    /// What "Reset to default" sends, as the Sonos app does.
+    static let defaults: [SoundSetting] = [.bass(0), .treble(0), .loudness(true)]
+
+    mutating func apply(_ setting: SoundSetting) {
+        switch setting {
+        case .bass(let value): bass = value
+        case .treble(let value): treble = value
+        case .loudness(let on): loudness = on
+        }
+    }
+}
+
+/// One change to the sound of a room.
+enum SoundSetting: Equatable {
+    case bass(Int)
+    case treble(Int)
+    case loudness(Bool)
+}
+
+/// What a player says about itself in `/xml/device_description.xml`.
+struct SonosDevice: Identifiable, Equatable {
+    /// The UUID, such as `RINCON_000E58A0B1C201400`.
+    let id: String
+    /// The product, such as `Bookshelf`.
+    let name: String
+    /// The model number, such as `S21`.
+    let model: String
+    let serialNumber: String
+    let softwareVersion: String
+    let hardwareVersion: String
+    let ipAddress: String
 }
 
 /// What a group plays, and how loud.

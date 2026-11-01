@@ -114,6 +114,71 @@ struct SonosControllerTests {
     }
 }
 
+/// Sound settings belong to a room, so they skip the coordinator.
+@MainActor
+struct RoomSoundTests {
+    private let kitchenSpeaker = URL(string: "http://10.0.0.2:1400")!
+    private let livingRoomSpeaker = URL(string: "http://10.0.0.3:1400")!
+    private let kitchenPlayer = FakeSonosPlayer()
+    private let livingRoomPlayer = FakeSonosPlayer()
+
+    /// Kitchen leads Living Room; each room has its own player.
+    private func controller() async -> (SonosController, kitchen: SonosRoom, livingRoom: SonosRoom) {
+        let kitchen = SonosRoom(id: "RINCON_K", name: "Kitchen", address: kitchenSpeaker, devices: [kitchenSpeaker])
+        let livingRoom = SonosRoom(id: "RINCON_L", name: "Living Room", address: livingRoomSpeaker,
+                                   devices: [livingRoomSpeaker])
+        kitchenPlayer.groups = [SonosGroup(id: "RINCON_K", name: "Kitchen + 1", coordinator: kitchenSpeaker,
+                                           rooms: [kitchen, livingRoom])]
+        let players = [kitchenSpeaker: kitchenPlayer, livingRoomSpeaker: livingRoomPlayer]
+        let controller = SonosController(makePlayer: { players[$0]! },
+                                         defaults: UserDefaults(suiteName: "RoomSoundTests-\(UUID())")!)
+        controller.found([kitchenSpeaker])
+        await controller.loadGroups()
+        return (controller, kitchen, livingRoom)
+    }
+
+    @Test func aChangeGoesToTheRoomsOwnPlayer() async throws {
+        let (controller, _, livingRoom) = await controller()
+        let room = try #require(controller.rooms.first { $0.id == livingRoom.id })
+
+        await controller.change([.bass(4)], of: room)
+
+        #expect(livingRoomPlayer.sound.bass == 4)
+        #expect(kitchenPlayer.sound.bass == 0, "the coordinator keeps its own bass")
+    }
+
+    @Test func resetToDefaultFlattensTheSoundAndTurnsLoudnessOn() async {
+        let (controller, kitchen, _) = await controller()
+        kitchenPlayer.sound = SoundSettings(bass: -3, treble: 6, loudness: false, trueplay: true)
+
+        await controller.change(SoundSettings.defaults, of: kitchen)
+
+        #expect(kitchenPlayer.sound == SoundSettings(bass: 0, treble: 0, loudness: true, trueplay: true))
+    }
+
+    @Test func aRefusedChangeNamesTheRoom() async {
+        let (controller, _, livingRoom) = await controller()
+        livingRoomPlayer.failure = AppError("SetBass failed on 10.0.0.3 (error 402)", code: 402)
+
+        let changed = await controller.change([.bass(2)], of: livingRoom)
+
+        #expect(!changed)
+        #expect(controller.errorMessage?.hasPrefix("Couldn't change the sound of Living Room") == true)
+    }
+
+    @Test func devicesLeaveOutAPlayerThatDoesNotAnswer() async {
+        let (controller, kitchen, _) = await controller()
+        kitchenPlayer.description = SonosDevice(id: "RINCON_K", name: "Bookshelf", model: "S21", serialNumber: "",
+                                                softwareVersion: "", hardwareVersion: "", ipAddress: "10.0.0.2")
+        let pair = SonosRoom(id: kitchen.id, name: kitchen.name, address: kitchenSpeaker,
+                             devices: [kitchenSpeaker, livingRoomSpeaker])
+
+        let devices = await controller.devices(in: pair)
+
+        #expect(devices.map(\.id) == ["RINCON_K"])
+    }
+}
+
 /// The SOAP adapter speaks the protocol a Sonos player expects.
 @MainActor
 struct SOAPSonosPlayerTests {
@@ -148,6 +213,90 @@ struct SOAPSonosPlayerTests {
         let body = recorded.requests[0].bodyText
         #expect(body.contains("<DesiredFirstTrackNumberEnqueued>8</DesiredFirstTrackNumberEnqueued>"))
         #expect(body.contains("<EnqueueAsNext>1</EnqueueAsNext>"))
+    }
+
+    /// An answer in the format the Symfonisk sends, with other values.
+    private func renderingControlAnswer(_ action: String, _ body: String) -> RecordedTransport.Answer {
+        (200, """
+        <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" \
+        s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>\
+        <u:\(action)Response xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">\(body)</u:\(action)Response>\
+        </s:Body></s:Envelope>
+        """)
+    }
+
+    @Test func readsTheSoundOfARoomFromItsRenderingControl() async throws {
+        let recorded = RecordedTransport()
+        recorded.answer(soapAction: "GetBass", renderingControlAnswer("GetBass", "<CurrentBass>-3</CurrentBass>"))
+        recorded.answer(soapAction: "GetTreble", renderingControlAnswer("GetTreble", "<CurrentTreble>2</CurrentTreble>"))
+        recorded.answer(soapAction: "GetLoudness",
+                        renderingControlAnswer("GetLoudness", "<CurrentLoudness>1</CurrentLoudness>"))
+        recorded.answer(soapAction: "GetRoomCalibrationStatus", renderingControlAnswer("GetRoomCalibrationStatus",
+            "<RoomCalibrationEnabled>1</RoomCalibrationEnabled><RoomCalibrationAvailable>0</RoomCalibrationAvailable>"))
+        let player = SOAPSonosPlayer(address: URL(string: "http://10.0.0.3:1400")!, transport: recorded.transport)
+
+        let sound = try await player.soundSettings()
+
+        #expect(sound == SoundSettings(bass: -3, treble: 2, loudness: true, trueplay: true))
+        #expect(recorded.requests.allSatisfy {
+            $0.url?.absoluteString == "http://10.0.0.3:1400/MediaRenderer/RenderingControl/Control"
+        })
+        #expect(recorded.requests.first { $0.soapAction == "GetLoudness" }?.bodyText
+            .contains("<Channel>Master</Channel>") == true)
+    }
+
+    @Test func aPlayerWithoutTrueplayStillGivesItsSound() async throws {
+        let recorded = RecordedTransport()
+        recorded.answer(soapAction: "GetBass", renderingControlAnswer("GetBass", "<CurrentBass>0</CurrentBass>"))
+        recorded.answer(soapAction: "GetTreble", renderingControlAnswer("GetTreble", "<CurrentTreble>0</CurrentTreble>"))
+        recorded.answer(soapAction: "GetLoudness",
+                        renderingControlAnswer("GetLoudness", "<CurrentLoudness>0</CurrentLoudness>"))
+        let player = SOAPSonosPlayer(address: URL(string: "http://10.0.0.3:1400")!, transport: recorded.transport)
+
+        let sound = try await player.soundSettings()
+
+        #expect(sound.trueplay == nil)
+        #expect(!sound.loudness)
+    }
+
+    @Test func soundChangesUseTheSonosArgumentNames() async throws {
+        let recorded = RecordedTransport()
+        for action in ["SetBass", "SetTreble", "SetLoudness"] {
+            recorded.answer(soapAction: action, renderingControlAnswer(action, ""))
+        }
+        let player = SOAPSonosPlayer(address: URL(string: "http://10.0.0.3:1400")!, transport: recorded.transport)
+
+        for setting in [SoundSetting.bass(-4), .treble(3), .loudness(false)] { try await player.change(setting) }
+
+        let bodies = recorded.requests.map(\.bodyText)
+        #expect(bodies[0].contains("<DesiredBass>-4</DesiredBass>"))
+        #expect(bodies[1].contains("<DesiredTreble>3</DesiredTreble>"))
+        #expect(bodies[2].contains("<Channel>Master</Channel><DesiredLoudness>0</DesiredLoudness>"))
+    }
+
+    @Test func readsTheDeviceFromItsDescriptionNotItsServices() async throws {
+        // Shortened from the Symfonisk's /xml/device_description.xml.
+        let description = """
+        <?xml version="1.0" encoding="utf-8" ?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0"><device>
+        <deviceType>urn:schemas-upnp-org:device:ZonePlayer:1</deviceType>
+        <modelNumber>S21</modelNumber><modelName>SYMFONISK Bookshelf</modelName>
+        <softwareVersion>86.10-81100</softwareVersion><hardwareVersion>1.20.3.3-2.0</hardwareVersion>
+        <serialNum>00-0E-58-A0-B1-C2:0</serialNum><UDN>uuid:RINCON_000E58A0B1C201400</UDN>
+        <roomName>Symfonisk</roomName><displayName>Bookshelf</displayName>
+        <deviceList><device><deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
+        <modelNumber>S21</modelNumber><UDN>uuid:RINCON_000E58A0B1C201400_MR</UDN></device></deviceList>
+        </device></root>
+        """
+        let recorded = RecordedTransport()
+        recorded.answer((200, description)) { $0.url?.path() == "/xml/device_description.xml" }
+        let player = SOAPSonosPlayer(address: URL(string: "http://192.168.1.147:1400")!, transport: recorded.transport)
+
+        let device = try await player.device()
+
+        #expect(device == SonosDevice(id: "RINCON_000E58A0B1C201400", name: "Bookshelf", model: "S21",
+                                      serialNumber: "00-0E-58-A0-B1-C2:0", softwareVersion: "86.10-81100",
+                                      hardwareVersion: "1.20.3.3-2.0", ipAddress: "192.168.1.147"))
     }
 
     @Test func aFaultCarriesTheSonosErrorCode() async {
