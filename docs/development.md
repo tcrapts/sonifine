@@ -30,7 +30,8 @@ the iPhone volume before and after, and whether the app counted it as a press.
 ## Icon
 
 `make icon` redraws `App/Assets.xcassets/AppIcon.appiconset/icon-1024.png` with
-`scripts/make_icon.py`: a flat volume dial with a few bold steps, more than half lit.
+`scripts/make_icon.py`: the scale of a volume knob on near black, its lit marks
+running from teal through green to lime.
 
 ## Simulator
 
