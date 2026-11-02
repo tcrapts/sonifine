@@ -219,6 +219,23 @@ struct RadioPlaybackTests {
         #expect(fake.streams.map { $0.uri.components(separatedBy: "sn=").last } == ["3", "2", "2"])
     }
 
+    @Test func whileAStationStartsTheMiniPlayerShowsItNotWhatPlayedBefore() async throws {
+        let controller = await controller()
+        controller.streamStartChecks = 2
+        fake.playsStream = { _ in false }
+        let logo = URL(string: "https://cdn-profiles.tunein.com/s1993/images/logog.png")!
+
+        let start = Task {
+            await controller.play(.stream(URL(string: "https://stream.bnr.nl/bnr_mp3_128_20")!,
+                                          name: "BNR Nieuwsradio", logo: logo))
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(controller.starting == Starting(name: "BNR Nieuwsradio", imageURL: logo))
+
+        await start.value
+        #expect(controller.starting == nil)
+    }
+
     @Test func anUnknownAccountIsFoundByTryingAndThenRemembered() async {
         let controller = await controller()
         controller.streamStartChecks = 2

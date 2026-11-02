@@ -75,7 +75,7 @@ struct SearchView: View {
     private func rows(_ title: String, _ items: [SpotifyItem], playing list: [SpotifyItem] = []) -> some View {
         if !items.isEmpty {
             Section(title) {
-                ForEach(items) { item in ItemRow(item: item) { play(.tap(item, in: list)) } }
+                ForEach(items) { item in ItemRow(item: item) { play(.tap(item, in: list), showing: item) } }
             }
         }
     }

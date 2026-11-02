@@ -23,7 +23,7 @@ struct ShowView: View {
                 }
             }
         } row: { episode, _ in
-            ItemRow(item: episode) { play(.tap(episode)) }
+            ItemRow(item: episode) { play(.tap(episode), showing: episode) }
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

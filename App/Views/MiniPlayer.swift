@@ -11,18 +11,23 @@ struct MiniPlayer: View {
         // Folded into the tab bar there is room for the cover, title and play button only.
         let isInline = placement == .inline
         HStack(spacing: 10) {
-            Artwork(url: status.artworkURL, cornerRadius: 6).frame(width: isInline ? 26 : 34, height: isInline ? 26 : 34)
+            // While Sonos starts something, show that, not what played before.
+            Artwork(url: sonos.starting.map(\.imageURL) ?? status.artworkURL, cornerRadius: 6)
+                .frame(width: isInline ? 26 : 34, height: isInline ? 26 : 34)
             VStack(alignment: .leading, spacing: 0) {
                 if let message = sonos.errorMessage {
                     Text(message).foregroundStyle(.red).lineLimit(1)
                 } else if let notice = sonos.notice {
                     Label(notice, systemImage: "checkmark").lineLimit(1)
-                } else if sonos.isStartingPlayback {
-                    Text(status.streamProgress?.label ?? "Starting…")
+                } else if let starting = sonos.starting {
+                    Text(starting.name.isEmpty ? "Starting…" : starting.name).lineLimit(1)
+                    if !isInline {
+                        Text(status.streamProgress?.label ?? "Starting…").font(.caption).foregroundStyle(.secondary)
+                    }
                 } else {
                     Text(sonos.selectedGroup == nil ? "Looking for your Sonos…" : status.displayTitle).lineLimit(1)
                 }
-                if !isInline {
+                if !isInline, sonos.starting == nil {
                     Text(sonos.selectedGroup?.name ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }

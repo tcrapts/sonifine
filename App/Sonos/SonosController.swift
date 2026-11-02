@@ -13,7 +13,9 @@ final class SonosController {
     /// Counts presses of the volume buttons, so the volume overlay can show each one.
     private(set) var volumeButtonPresses = 0
     /// True while a playlist, album or songs are being put in the queue.
-    private(set) var isStartingPlayback = false
+    /// What Sonos is starting now, for the mini-player; nil once it plays or failed.
+    private(set) var starting: Starting?
+    var isStartingPlayback: Bool { starting != nil }
     /// A short confirmation, such as "Added to the queue", for two seconds.
     private(set) var notice: String?
     /// True while a volume change is on its way to Sonos.
@@ -324,7 +326,8 @@ final class SonosController {
     /// Plays a request on the selected group: songs replace its queue, a station
     /// plays instead of it. A new request waits for the one before it, so two
     /// taps never mix their queues.
-    func play(_ request: PlayRequest) async {
+    func play(_ request: PlayRequest, showing: Starting? = nil) async {
+        starting = showing ?? request.starting ?? Starting(name: "", imageURL: nil)
         let previous = playback
         previous?.cancel()
         let task = Task {
@@ -334,6 +337,8 @@ final class SonosController {
         }
         playback = task
         await task.value
+        // A newer tap shows its own start.
+        if playback == task { starting = nil }
     }
 
     private func run(_ request: PlayRequest) async {
@@ -358,8 +363,6 @@ final class SonosController {
             return
         }
 
-        isStartingPlayback = true
-        defer { isStartingPlayback = false }
         lastAction[group.id] = .now
         let player = player(group)
         do {
@@ -437,8 +440,6 @@ final class SonosController {
     /// Starts a stream on `group` instead of its queue: `attempt` returns once it
     /// plays, or throws why not. Meanwhile the mini-player shows it is starting.
     private func playStream(named name: String, on group: SonosGroup, _ attempt: () async throws -> Void) async {
-        isStartingPlayback = true
-        defer { isStartingPlayback = false }
         lastAction[group.id] = .now
         do {
             try await attempt()

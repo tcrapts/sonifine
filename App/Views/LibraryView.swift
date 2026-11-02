@@ -73,7 +73,7 @@ struct LibraryPageView: View {
 
     private func list(_ title: String, _ items: [SpotifyItem], orderKey: String, sortKeys: [ListOrder.Key]) -> some View {
         ItemList(title, items: items, orderKey: orderKey, sortKeys: sortKeys) { item, shown in
-            ItemRow(item: item) { play(.tap(item, in: shown.items)) }
+            ItemRow(item: item) { play(.tap(item, in: shown.items), showing: item) }
         }
     }
 
@@ -83,11 +83,11 @@ struct LibraryPageView: View {
         ItemList("Liked Songs", items: songs, orderKey: "likedSongsOrder", defaultOrder: .newestFirst,
                  sortKeys: [.title, .artist, .album, .added]) { shown in
             ListHeader(item: nil) {
-                PlayButtons(play: { play(.songs(shown.items.map(\.uri), start: 0, shuffle: false)) },
+                PlayButtons(play: { play(.songs(shown.items.map(\.uri), start: 0, shuffle: false), showing: shown.items.first) },
                             shuffle: { play(.songs(shown.items.map(\.uri), start: 0, shuffle: true)) })
             }
         } row: { song, shown in
-            ItemRow(item: song) { play(.tap(song, in: shown.items)) }
+            ItemRow(item: song) { play(.tap(song, in: shown.items), showing: song) }
         }
     }
 }

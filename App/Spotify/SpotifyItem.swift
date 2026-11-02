@@ -61,6 +61,21 @@ struct SpotifySearchResults: Equatable {
     var episodes: [SpotifyItem] = []
 }
 
+/// What the mini-player shows while Sonos starts a request: its name and cover.
+struct Starting: Equatable {
+    let name: String
+    let imageURL: URL?
+
+    init(name: String, imageURL: URL?) {
+        self.name = name
+        self.imageURL = imageURL
+    }
+
+    init(_ item: SpotifyItem) {
+        self.init(name: item.name, imageURL: item.imageURL)
+    }
+}
+
 /// What a tap asks Sonos to play.
 enum PlayRequest: Equatable {
     /// Songs in this order, beginning with the one at `start`.
@@ -107,6 +122,19 @@ enum PlayRequest: Equatable {
             return .show(item)
         case .other:
             return nil
+        }
+    }
+}
+
+extension PlayRequest {
+    /// What a station or stream shows while it starts; songs need the tapped item.
+    var starting: Starting? {
+        switch self {
+        case .station(let station): Starting(name: station.name, imageURL: station.imageURL)
+        case .stream(_, let name, let logo): Starting(name: name, imageURL: logo)
+        case .artist(let artist, _): Starting(artist)
+        case .show(let show): Starting(show)
+        case .songs, .collection, .episode: nil
         }
     }
 }

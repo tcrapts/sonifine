@@ -44,7 +44,7 @@ struct SonifineApp: App {
             .environment(catalog)
             .environment(radio)
             .environment(favourites)
-            .environment(\.play, PlayAction { request in Task { await play(request) } })
+            .environment(\.play, PlayAction { request, starting in Task { await play(request, showing: starting) } })
             .environment(\.addToQueue, QueueAction { uri, next in Task { await sonos.addToQueue(uri, next: next) } })
             .background(HiddenVolumeView(watcher: watcher).frame(width: 1, height: 1))
             .task {
@@ -72,13 +72,13 @@ struct SonifineApp: App {
 
     /// The one way the screens start music: the catalog turns an artist into
     /// songs, then Sonos plays the request.
-    private func play(_ request: PlayRequest?) async {
+    private func play(_ request: PlayRequest?, showing starting: Starting?) async {
         guard let request else {
             sonos.report("Sonos can't play this kind of item.")
             return
         }
         do {
-            await sonos.play(try await catalog.resolve(request))
+            await sonos.play(try await catalog.resolve(request), showing: starting)
         } catch {
             if !HTTP.isCancellation(error) { sonos.report(error.localizedDescription) }
         }

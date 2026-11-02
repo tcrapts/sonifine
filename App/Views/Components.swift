@@ -14,8 +14,12 @@ extension Color {
 /// Starts music on the selected Sonos group. The app puts one in the
 /// environment; every play button and song row calls it.
 struct PlayAction {
-    let run: (PlayRequest?) -> Void
-    func callAsFunction(_ request: PlayRequest?) { run(request) }
+    let run: (PlayRequest?, Starting?) -> Void
+
+    /// `showing` is what the mini-player shows while it starts, such as the tapped playlist.
+    func callAsFunction(_ request: PlayRequest?, showing item: SpotifyItem? = nil) {
+        run(request, item.map(Starting.init))
+    }
 }
 
 /// Adds a song, album or playlist to the queue: next, or at the end.
@@ -25,7 +29,7 @@ struct QueueAction {
 }
 
 extension EnvironmentValues {
-    @Entry var play = PlayAction { _ in }
+    @Entry var play = PlayAction { _, _ in }
     @Entry var addToQueue = QueueAction { _, _ in }
 }
 
@@ -121,7 +125,7 @@ struct Card: View {
                 } else {
                     cover
                 }
-                PlayCircle(name: item.name) { play(.tap(item, in: list)) }
+                PlayCircle(name: item.name) { play(.tap(item, in: list), showing: item) }
             }
             Text(item.name).font(.subheadline.bold()).lineLimit(1)
             Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)

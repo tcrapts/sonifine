@@ -55,7 +55,7 @@ struct ItemList<Item: Listable, Header: View, Row: View>: View {
             if kinds.count > 1 {
                 FilterChips(options: [nil] + kinds, selection: $kind) { $0 ?? "All" }
             }
-            Section(sectionTitle) {
+            Section {
                 if let message {
                     Text(message).font(.footnote).foregroundStyle(.red)
                 }
@@ -65,8 +65,13 @@ struct ItemList<Item: Listable, Header: View, Row: View>: View {
                     ContentUnavailableView.search(text: text)
                 }
                 ForEach(shown.items) { row($0, shown) }
+            } header: {
+                // An empty title would still leave a header's room.
+                if !sectionTitle.isEmpty { Text(sectionTitle) }
             }
         }
+        // The header with its buttons sits close to the list, as in Spotify.
+        .listSectionSpacing(.compact)
         .navigationTitle(title)
         .searchable(text: $text, placement: .navigationBarDrawer, prompt: prompt)
         .toolbar {

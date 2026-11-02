@@ -15,7 +15,8 @@ struct DetailView: View {
                  sortKeys: [.custom, .title, .artist, .album, .added], sectionTitle: item.kind == .artist ? "Popular" : "",
                  message: errorMessage, prompt: "Search in \(item.name)") { shown in
             ListHeader(item: item) {
-                PlayButtons(play: { play(playAll(shown)) }, shuffle: { play(playAll(shown, shuffle: true)) })
+                PlayButtons(play: { play(playAll(shown), showing: item) },
+                            shuffle: { play(playAll(shown, shuffle: true), showing: item) })
             }
             if !albums.isEmpty {
                 Section {
@@ -28,7 +29,8 @@ struct DetailView: View {
             // In a playlist or album as it came, a song plays inside it; an artist's
             // songs and a searched or sorted list play as the songs shown.
             ItemRow(item: song) {
-                play(.tap(song, in: shown.items, collection: item.kind == .artist || shown.rearranged ? nil : item))
+                play(.tap(song, in: shown.items, collection: item.kind == .artist || shown.rearranged ? nil : item),
+                     showing: song)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
