@@ -89,7 +89,11 @@ final class SOAPSonosPlayer: SonosPlayer {
                            ["InstanceID": "0", "DesiredVolume": String(volume)])
     }
 
-    func play() async throws { _ = try await call(.avTransport, "Play", ["InstanceID": "0", "Speed": "1"]) }
+    /// Sonos answers Play on a radio stream only once it has connected to it, which
+    /// took 5.9 seconds for BNR: give it longer than the other actions.
+    func play() async throws {
+        _ = try await call(.avTransport, "Play", ["InstanceID": "0", "Speed": "1"], timeout: 20)
+    }
     func pause() async throws { _ = try await call(.avTransport, "Pause") }
     func next() async throws { _ = try await call(.avTransport, "Next") }
     func previous() async throws { _ = try await call(.avTransport, "Previous") }
@@ -188,7 +192,8 @@ final class SOAPSonosPlayer: SonosPlayer {
     // MARK: SOAP
 
     private func call(_ service: Service, _ action: String,
-                      _ arguments: KeyValuePairs<String, String> = ["InstanceID": "0"]) async throws -> XMLNode {
+                      _ arguments: KeyValuePairs<String, String> = ["InstanceID": "0"],
+                      timeout: TimeInterval = 4) async throws -> XMLNode {
         let body = arguments.map { "<\($0.key)>\($0.value.xmlEscaped)</\($0.key)>" }.joined()
         let envelope = """
         <?xml version="1.0" encoding="utf-8"?>\
@@ -197,7 +202,7 @@ final class SOAPSonosPlayer: SonosPlayer {
         <u:\(action) xmlns:u="\(service.urn)">\(body)</u:\(action)>\
         </s:Body></s:Envelope>
         """
-        var request = URLRequest(url: address.appending(path: service.path), timeoutInterval: 4)
+        var request = URLRequest(url: address.appending(path: service.path), timeoutInterval: timeout)
         request.httpMethod = "POST"
         request.setValue("text/xml; charset=\"utf-8\"", forHTTPHeaderField: "Content-Type")
         request.setValue("\"\(service.urn)#\(action)\"", forHTTPHeaderField: "SOAPACTION")

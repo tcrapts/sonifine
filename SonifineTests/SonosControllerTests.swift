@@ -237,6 +237,19 @@ struct SOAPSonosPlayerTests {
         #expect(recorded.requests[1].bodyText.contains("<NumberOfURIs>16</NumberOfURIs>"))
     }
 
+    @Test func playWaitsLongerThanOtherActionsForAStreamToConnect() async throws {
+        let recorded = RecordedTransport()
+        recorded.answer(soapAction: "Play", (200, soapAnswer("Play", "")))
+        recorded.answer(soapAction: "Pause", (200, soapAnswer("Pause", "")))
+        let player = SOAPSonosPlayer(address: URL(string: "http://10.0.0.2:1400")!, transport: recorded.transport)
+
+        try await player.play()
+        try await player.pause()
+
+        // BNR's direct stream took 5.9 seconds to answer Play.
+        #expect(recorded.requests.map(\.timeoutInterval) == [20, 4])
+    }
+
     @Test func removingASongNamesItsPlaceInTheQueueCountedFromOne() async throws {
         let recorded = RecordedTransport()
         recorded.answer(soapAction: "RemoveTrackFromQueue", (200, soapAnswer("RemoveTrackFromQueue", "")))
