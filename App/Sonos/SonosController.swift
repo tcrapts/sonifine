@@ -163,7 +163,9 @@ final class SonosController {
                 }
                 remember(status.spotifyAccount)
                 // A wrong account number leaves the speaker starting forever; learn only from one that plays.
-                if status.isPlaying, !status.isStarting { remember(status.radioAccount) }
+                // Several numbers can play some stations; keep the one the app chose, and learn
+                // only when it has none, from a station that plays.
+                if radioAccount == nil, status.isPlaying, !status.isStarting { remember(status.radioAccount) }
                 regrouped = regrouped || status.followsAnotherGroup
                 if statuses[id].map(status.differs(from:)) ?? true { statuses[id] = status }
             }

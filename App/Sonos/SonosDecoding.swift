@@ -74,6 +74,13 @@ extension SonosDevice {
 }
 
 extension GroupStatus {
+    /// A stream's file name, such as an ad before a station starts:
+    /// `bump_sonic_pre_pre.mp3?aw_0_1st.playerid=SonosRadio&…`. No song is called that.
+    static func isFileName(_ title: String) -> Bool {
+        title.range(of: #"^\S+\.(mp3|aac|m4a|mp4|ogg|opus|flac|wav|m3u8?|pls)(\?\S*)?$"#,
+                    options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     /// The URI schemes of radio, which plays instead of the queue.
     private static let radioSchemes = ["x-sonosapi-radio:", "x-sonosapi-stream:", "x-sonosapi-hls:", "x-rincon-mp3radio:", "aac:"]
 
@@ -92,7 +99,9 @@ extension GroupStatus {
         // A live stream may carry its file name as the title, such as
         // `BNR_NIEUWSRADIOAAC.aac?dist=tunein&…`, which is part of its address: leave it out.
         let address = track?.value("res") ?? ""
-        let title = track?.value("title").flatMap { $0.hasPrefix("x-") || address.contains($0) ? nil : $0 }
+        let title = track?.value("title").flatMap {
+            $0.hasPrefix("x-") || address.contains($0) || Self.isFileName($0) ? nil : $0
+        }
 
         self.init(
             volume: volume.value("CurrentVolume").flatMap(Int.init) ?? 0,

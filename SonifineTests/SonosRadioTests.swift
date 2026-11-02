@@ -204,6 +204,21 @@ struct RadioPlaybackTests {
         #expect(fake.streams.first?.uri.hasSuffix("sn=2") == true, "the hanging number 3 wasn't learned")
     }
 
+    @Test func aRememberedNumberThatHangsGivesWayToOneThatPlays() async {
+        let controller = await controller()
+        controller.streamStartChecks = 2
+        // SLAM played with number 3, so the app learned 3; BNR only plays with 2.
+        fake.status.radioAccount = RadioAccount(accountNumber: "3")
+        fake.status.isPlaying = true
+        await controller.refresh()
+        fake.playsStream = { $0.uri.hasSuffix("sn=2") }
+
+        await controller.play(.station(station("tunein:4345", "BNR Nieuwsradio")))
+        await controller.play(.station(station("tunein:4345", "BNR Nieuwsradio")))
+
+        #expect(fake.streams.map { $0.uri.components(separatedBy: "sn=").last } == ["3", "2", "2"])
+    }
+
     @Test func anUnknownAccountIsFoundByTryingAndThenRemembered() async {
         let controller = await controller()
         controller.streamStartChecks = 2
@@ -278,6 +293,22 @@ struct RadioStatusTests {
             """), trackMetadata: track)
 
         #expect(status.displayTitle == "BNR Nieuwsradio")
+    }
+
+    @Test func anAdBeforeTheStationShowsTheStation() throws {
+        let stream = try #require(station("tunein:17258", "SLAM!").stream(account: RadioAccount(accountNumber: "2")))
+        // As the Symfonisk reported the TuneIn ad before SLAM! started.
+        let track = """
+        <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">\
+        <item id="-1" parentID="-1"><dc:title>bump_sonic_pre_pre.mp3?aw_0_1st.playerid=SonosRadio&amp;aw_0_1st.skey=1793602824\
+        </dc:title></item></DIDL-Lite>
+        """
+        let status = status(media: soapAnswer("GetMediaInfo", """
+            <NrTracks>1</NrTracks><CurrentURI>\(xmlEscaped(stream.uri))</CurrentURI>\
+            <CurrentURIMetaData>\(xmlEscaped(stream.metadata))</CurrentURIMetaData>
+            """), trackMetadata: track)
+
+        #expect(status.displayTitle == "SLAM!")
     }
 
     @Test func theQueueIsNoRadio() {
