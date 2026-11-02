@@ -18,7 +18,8 @@ struct SearchView: View {
         let results = catalog.searchResults
         List {
             if !query.isEmpty {
-                FilterChips(options: Filter.allCases, selection: $filter) { $0.rawValue }
+                FilterChips(options: Filter.allCases.filter { $0 != .podcasts || catalog.hasWebAPI },
+                            selection: $filter) { $0.rawValue }
             }
             switch filter {
             case .all:
@@ -50,11 +51,16 @@ struct SearchView: View {
         }
         .overlay {
             if query.isEmpty {
-                if catalog.isSignedIn {
+                if catalog.hasLibrary {
                     ContentUnavailableView("Search Spotify and radio", systemImage: "magnifyingglass",
-                                           description: Text("Songs, artists, albums, playlists, podcasts and stations"))
+                                           description: Text(catalog.hasWebAPI
+                                               ? "Songs, artists, albums, playlists, podcasts and stations"
+                                               : "Songs, artists, albums, playlists and stations"))
                 } else {
-                    ScrollView { SpotifySignIn().padding() }
+                    ScrollView {
+                    // Without a developer app, the link is the way to Spotify.
+                    Group { if catalog.hasWebAPI { SpotifySignIn() } else { ConnectSpotifyHome() } }.padding()
+                }
                 }
             }
         }

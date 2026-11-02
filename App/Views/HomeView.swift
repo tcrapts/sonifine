@@ -61,7 +61,7 @@ struct HomeView: View {
             Shelf(title: "Recently played", items: catalog.library.recentlyPlayed)
             Shelf(title: "Your albums", items: catalog.library.albums)
         }
-        if !catalog.isSignedIn {
+        if !catalog.isSignedIn, catalog.hasWebAPI {
             SpotifySignIn().padding(.horizontal)
         }
         if let message = catalog.errorMessage {

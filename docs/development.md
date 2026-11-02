@@ -17,7 +17,7 @@ build settings:
 | --- | --- | --- |
 | `APPLE_TEAM_ID` | `DEVELOPMENT_TEAM` | Signing for the iPhone. |
 | `BUNDLE_ID` | `APP_BUNDLE_IDENTIFIER` | The app's `PRODUCT_BUNDLE_IDENTIFIER`; the tests get `$(APP_BUNDLE_IDENTIFIER).tests`. `make logs` starts the app by it. |
-| `SPOTIFY_CLIENT_ID` | `SPOTIFY_CLIENT_ID` | `SpotifyClientID` in Info.plist, which `SpotifyWebAPI` reads. Without it the library sign-in says so. |
+| `SPOTIFY_CLIENT_ID` | `SPOTIFY_CLIENT_ID` | `SpotifyClientID` in Info.plist, which `SpotifyWebAPI` reads. Optional: without it the app leaves out what needs the Web API (podcasts, recently played, the heart and its sign-in), and the rest comes through the Sonos link. |
 | `IPHONE_UDID` | — | The iPhone for `devicectl` in `make device` and `make logs`. |
 
 A value left empty keeps the project's own. One run can override a value, as in

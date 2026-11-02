@@ -122,6 +122,11 @@ covers ahead and beside come from no queue.
 
 ## The two Spotify connections
 
+The link is all a build needs. The library sign-in is optional: without a
+`SPOTIFY_CLIENT_ID` (`SpotifyCatalog.hasWebAPI` is false) the app hides podcasts,
+recently played, the heart and the sign-in itself, and ignores a sign-in made by
+another build.
+
 - **Link** (`SonosSpotifyService`), see [ADR 0002](adr/0002-spotify-home-through-the-sonos-spotify-service.md).
   SOAP endpoint `https://spotify-v5.ws.sonos.com/smapi` with AppLink: `getAppLink`
   gives a sign-in page, `getDeviceAuthToken` gives a token and key after sign-in.

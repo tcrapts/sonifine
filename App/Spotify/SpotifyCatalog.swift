@@ -17,6 +17,13 @@ final class SpotifyCatalog {
     private(set) var library = SpotifyWebAPI.Library()
     private(set) var searchResults = SpotifySearchResults()
 
+    /// Whether this build has a Spotify developer app (`SPOTIFY_CLIENT_ID`). Without
+    /// one, the extras of the Web API stay out of sight: podcasts, recently played,
+    /// the heart and the library sign-in. Everything else comes through the link.
+    var hasWebAPI: Bool { SpotifyWebAPI.clientID != nil }
+    /// Whether there is a library to show, from the link or the sign-in.
+    var hasLibrary: Bool { isLinked || isSignedIn }
+
     // Link
     private(set) var isLinked: Bool
     private(set) var homeShelves: [HomeShelf] = []
@@ -40,7 +47,8 @@ final class SpotifyCatalog {
         self.sonosService = sonosService
         self.libraryFile = libraryFile
         self.household = household
-        isSignedIn = webAPI.isSignedIn
+        // A sign-in from another build means nothing without a developer app in this one.
+        isSignedIn = webAPI.isSignedIn && SpotifyWebAPI.clientID != nil
         isLinked = sonosService.isLinked
         if isSignedIn || isLinked, let saved = savedLibrary() {
             (library, libraryAsked) = saved

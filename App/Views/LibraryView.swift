@@ -13,20 +13,25 @@ struct LibraryView: View {
 
     var body: some View {
         Group {
-            if catalog.isSignedIn {
+            if catalog.hasLibrary {
                 List {
                     link("Playlists", systemImage: "music.note.list", count: catalog.library.playlists.count, page: .playlists)
                     link("Liked Songs", systemImage: "heart.fill", count: catalog.library.likedSongs.count, page: .likedSongs)
                     link("Albums", systemImage: "square.stack.fill", count: catalog.library.albums.count, page: .albums)
-                    // The note counts down a pause, and goes when it is over.
-                    TimelineView(.periodic(from: .now, by: 10)) { context in
-                        link("Podcasts", systemImage: "mic.fill", count: catalog.library.shows.count, page: .podcasts,
-                             note: catalog.library.shows.isEmpty ? catalog.podcastsProblem?.message(at: context.date) : nil)
+                    // Podcasts only the Web API gives. The note counts down a pause, and goes when it is over.
+                    if catalog.hasWebAPI {
+                        TimelineView(.periodic(from: .now, by: 10)) { context in
+                            link("Podcasts", systemImage: "mic.fill", count: catalog.library.shows.count, page: .podcasts,
+                                 note: catalog.library.shows.isEmpty ? catalog.podcastsProblem?.message(at: context.date) : nil)
+                        }
                     }
                 }
                 .refreshable { await catalog.reload() }
             } else {
-                ScrollView { SpotifySignIn().padding() }
+                ScrollView {
+                    // Without a developer app, the link is the way to Spotify.
+                    Group { if catalog.hasWebAPI { SpotifySignIn() } else { ConnectSpotifyHome() } }.padding()
+                }
             }
         }
         .navigationTitle("Library")

@@ -118,11 +118,13 @@ struct SettingsView: View {
                 } footer: {
                     Text("Daily Mix, Release Radar and the rest of your Spotify home page, through Sonos.")
                 }
-                Section("Spotify library and search") {
-                    if catalog.isSignedIn {
-                        Button("Sign out", role: .destructive) { catalog.signOut() }
-                    } else {
-                        SpotifySignIn()
+                if catalog.hasWebAPI {
+                    Section("Spotify podcasts and more") {
+                        if catalog.isSignedIn {
+                            Button("Sign out", role: .destructive) { catalog.signOut() }
+                        } else {
+                            SpotifySignIn()
+                        }
                     }
                 }
                 Section {

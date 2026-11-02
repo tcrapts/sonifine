@@ -28,9 +28,10 @@ and an iPhone on the same Wi-Fi as your Sonos.
 1. **Your settings.** Copy `.env.example` to `.env` and fill it in: your Apple
    Team ID, a bundle ID of your own, your iPhone's UDID and, optionally, a
    Spotify client ID.
-2. **Spotify (optional).** The Spotify home, playlists, search and playback work
-   through your Sonos without any setup. For podcasts, recently played and the
-   heart, create an app at
+2. **Spotify (optional).** Your Spotify home, playlists, Liked Songs, albums,
+   search and playback work through your Sonos without any setup. A Spotify
+   developer app adds podcasts, recently played and the heart for Liked Songs;
+   without one, the app leaves those out. To add it, create an app at
    [developer.spotify.com](https://developer.spotify.com/dashboard) with the
    redirect URI `finevolume://spotify-callback`, add your Spotify account under
    **User Management**, and put its client ID in `.env`.
