@@ -23,8 +23,15 @@ struct FavouritesView: View {
         List {
             ForEach(favourites.all) { favourite in
                 Button { sheet = .edit(favourite) } label: {
-                    RadioLabel(name: favourite.name, subtitle: favourite.sourceLabel, imageURL: favourite.logoURL,
-                               isCurrent: sonos.selectedStatus.station == favourite.name)
+                    HStack {
+                        RadioLabel(name: favourite.name, subtitle: favourite.sourceLabel, imageURL: favourite.logoURL,
+                                   isCurrent: sonos.selectedStatus.station == favourite.name)
+                        // The grip says the row can move: touch and hold it, then drag.
+                        Image(systemName: "line.3.horizontal")
+                            .font(.title3)
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
                 }
                 .tint(.primary)
             }
