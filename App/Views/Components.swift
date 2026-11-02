@@ -3,11 +3,12 @@ import SafariServices
 import SwiftUI
 
 extension Color {
-    /// Green, a little darker in light mode so green text stays readable on white.
+    /// Neon green (#33FF73), a little deeper in light mode (#00C752) so green text stays
+    /// readable on white.
     static let accent = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.12, green: 0.84, blue: 0.53, alpha: 1)
-            : UIColor(red: 0.04, green: 0.62, blue: 0.36, alpha: 1)
+            ? UIColor(red: 0.20, green: 1.00, blue: 0.45, alpha: 1)
+            : UIColor(red: 0.00, green: 0.78, blue: 0.32, alpha: 1)
     })
 }
 
