@@ -36,6 +36,8 @@ final class NowPlayingSession {
     private let silence: AVAudioPCMBuffer
     private let log = Logger(subsystem: "com.example.sonifine", category: "NowPlaying")
     private var isRunning = false
+    /// When the silence was last started or tried.
+    private var lastStart = Date.distantPast
     private var pausedSince = Date.now
     private var artwork: (url: URL, item: MPMediaItemArtwork?)?
 
@@ -50,9 +52,11 @@ final class NowPlayingSession {
         observeInterruptions()
     }
 
-    /// Starts the silence. iOS lets an app start audio only in the foreground.
+    /// Starts the silence. iOS may refuse, for instance while another app holds the
+    /// audio; `update` then tries again every half minute.
     func start() {
         guard !isRunning else { return }
+        lastStart = .now
         do {
             try session.setCategory(.playback)
             try session.setActive(true)
@@ -85,6 +89,9 @@ final class NowPlayingSession {
             stop()
             return
         }
+        // Without the silence the lock screen and the buttons are lost: a refused or
+        // interrupted start is tried again, not left for the next launch.
+        if !isRunning, now.timeIntervalSince(lastStart) >= 30 { start() }
         guard let group else { return }
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: status.displayTitle,
@@ -145,10 +152,23 @@ final class NowPlayingSession {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if type == .began {
+                    self.log.info("silent audio interrupted")
                     self.isRunning = false
                 } else if type == .ended {
+                    self.log.info("interruption ended")
+                    self.lastStart = .distantPast
                     self.start()
                 }
+            }
+        }
+        // iOS restarted its audio service: everything must be set up again.
+        center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.log.info("audio services were reset")
+                self.isRunning = false
+                self.lastStart = .distantPast
+                self.start()
             }
         }
         center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
