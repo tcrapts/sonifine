@@ -1,9 +1,9 @@
 # Agent instructions
 
-Sonifine is the owner's personal iOS app for his Sonos system: the iPhone volume
-buttons change the Sonos volume in small, configurable steps, and Spotify plays
-on Sonos with as little effort as possible. It is modelled on the App Store app
-Sonify. One owner, one iPhone, no App Store release.
+Sonifine is a personal iOS app for a Sonos system: the iPhone volume buttons
+change the Sonos volume in small, configurable steps, and Spotify plays on Sonos
+with as little effort as possible. It is modelled on the App Store app Sonify.
+One owner, one iPhone, installed from source.
 
 Read [README](README.md) for the layout and [CONTEXT](CONTEXT.md) for the
 vocabulary before exploring the code.
@@ -21,10 +21,12 @@ vocabulary before exploring the code.
 
 ## House rules
 
-- The speakers are in the owner's home. Tests that play music or change the volume
-  are audible there: keep the volume as the owner left it and say what you played.
-- The bundle ID `com.example.sonifine` and the URL scheme `finevolume`
-  stay as they are. They keep the owner's logins on the installed app and match the
-  redirect URI in the Spotify dashboard.
-- the owner tests on his iPhone himself. After a change he can see, install it with
-  `make device` and tell him what to try.
+- The speakers are in the owner's home. Tests that play music or change the
+  volume are audible there: keep the volume as the owner left it and say what
+  you played.
+- The owner's values live in `local.mk` (git-ignored, see `local.example.mk`).
+  The bundle ID in `local.mk` and the URL scheme `finevolume` stay as they are:
+  they keep the owner's sign-ins on the installed app and match the redirect URI
+  in the Spotify dashboard.
+- The owner tests on the iPhone. After a change they can see, install it with
+  `make device` and tell them what to try.

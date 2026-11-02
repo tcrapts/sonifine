@@ -2,8 +2,8 @@
 
 ## Context
 
-the owner wanted his Spotify podcasts in the app: the shows he follows, their
-episodes, podcasts in Search, and an episode on the Sonos from where he stopped.
+The owner wanted their Spotify podcasts in the app: the shows they follow, their
+episodes, podcasts in Search, and an episode on the Sonos from where they stopped.
 
 Since February 2026 the Web API keeps, for apps in development mode,
 `GET /me/shows` (scope `user-library-read`), `GET /shows/{id}/episodes`,
@@ -19,7 +19,7 @@ plugin queues it (pull request 902):
 | --- | --- | --- | --- |
 | `spotify:episode:<id>` | `x-sonos-spotify:spotify%3aepisode%3a<id>?sid=9&flags=8224&sn=1` | `00032020spotify%3aepisode%3a<id>` | `object.item.audioItem.musicTrack` |
 
-the owner's Symfonisk resolves that URI through the household's Spotify account:
+A Symfonisk speaker resolves that URI through the household's Spotify account:
 its cover-art lookup `GET /getaa?s=1&u=<URI>` answered 200 with the cover of
 `spotify:episode:0FuKEjteM0cGzy7pznCkAj`, and 404 for a made-up ID. A show as a
 container (`x-rincon-cpcontainer:1006206cspotify%3ashow%3a<id>`) has no such

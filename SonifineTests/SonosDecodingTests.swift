@@ -4,7 +4,7 @@ import Testing
 
 /// Sonos answers decode into groups, a status and a queue without a speaker.
 struct SonosDecodingTests {
-    private let player = URL(string: "http://192.168.1.147:1400")!
+    private let player = URL(string: "http://192.168.1.20:1400")!
 
     @Test func groupsNameTheCoordinatorAndCountTheOtherRooms() {
         // Kitchen leads Living Room; Bedroom is a stereo pair (one invisible
@@ -78,7 +78,7 @@ struct SonosDecodingTests {
         #expect(status.title == "Don't Panic & Breathe")
         #expect(status.artist == "Coldplay")
         #expect(status.album == "Parachutes")
-        #expect(status.artworkURL?.absoluteString == "http://192.168.1.147:1400/getaa?s=1&u=x")
+        #expect(status.artworkURL?.absoluteString == "http://192.168.1.20:1400/getaa?s=1&u=x")
         #expect(status.spotifyTrack == SpotifyURI("spotify:track:2QhURnm7mQDxBb5jWkbDug"))
         #expect(status.spotifyAccount == SpotifyAccount(serviceID: "9", accountNumber: "1"))
         #expect(status.isPlaying, "Sonos reports TRANSITIONING right after Play")

@@ -79,7 +79,7 @@ struct RadioAccount: Equatable {
     let accountNumber: String
 
     /// The numbers to try when the app doesn't know the household's yet. Sonos counts
-    /// accounts from 0 as services are added; Spotify is often 1, Sonos Radio 2 (as at the owner's).
+    /// accounts from 0 as services are added; Spotify is often 1, Sonos Radio 2 (as in the household this was built in).
     static let likely = ([2, 3, 4, 5, 6, 7, 8, 1, 0] + Array(9...20)).map { RadioAccount(accountNumber: String($0)) }
 
     init(accountNumber: String) {

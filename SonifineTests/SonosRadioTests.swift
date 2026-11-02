@@ -178,7 +178,7 @@ struct RadioPlaybackTests {
 
     @Test func aStationPlaysWithTheAccountSonosUsedBeforeAndLeavesTheQueue() async {
         let controller = await controller()
-        // the owner once played a Sonos Radio station in the Sonos app.
+        // The owner once played a Sonos Radio station in the Sonos app.
         fake.status.radioAccount = RadioAccount(accountNumber: "7")
         fake.status.isPlaying = true
         await controller.refresh()
@@ -328,7 +328,7 @@ struct RadioPlaybackTests {
 
 /// The status of a group that plays radio.
 struct RadioStatusTests {
-    private let player = URL(string: "http://192.168.1.147:1400")!
+    private let player = URL(string: "http://192.168.1.20:1400")!
 
     private func status(media: String, trackMetadata: String = "") -> GroupStatus {
         GroupStatus(

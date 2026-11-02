@@ -2,7 +2,7 @@
 
 ## Context
 
-the owner wanted Sonos Radio (service 303, Sonos's own free radio) next to Spotify.
+The owner wanted Sonos Radio (service 303, Sonos's own free radio) next to Spotify.
 `MusicServices#ListAvailableServices` lists it with SMAPI endpoint
 `https://sali.sonos.superhi.fi/smapi` and `Auth="DeviceLink"`. Its manifest
 names a JSON home at `https://sali.sonos.superhi.fi/browse/v1`.
@@ -24,7 +24,7 @@ comes from favourites the Sonos app made (node-red-contrib-sonos-plus discussion
 Both use class `object.item.audioItem.audioBroadcast` and the service token
 `SA_RINCON77575_X_#Svc77575-0-Token` (303 × 256 + 7). The account number `sn` is
 the household's own index of its Sonos Radio account (seen elsewhere as 7 and
-20); the owner's speaker keeps no favourite, alarm or status page that shows it.
+20); the test speaker keeps no favourite, alarm or status page that shows it.
 
 ## Decision
 

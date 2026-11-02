@@ -63,7 +63,7 @@ struct SonosSpotifyServiceTests {
             </ns0:getMetadataResult></ns0:getMetadataResponse></s:Body></s:Envelope>
             """
         }
-        // As the owner's link answered for `your_songs`, one song per page here.
+        // As a real link answered for `your_songs`, one song per page here.
         let loser = """
             <ns0:mediaMetadata><ns0:id>spotify:track:5Xr20lO3fb2gLtDOKyF0G5</ns0:id><ns0:itemType>track</ns0:itemType>\
             <ns0:title>Loser (Fcukers Remix)</ns0:title><ns0:trackMetadata><ns0:artist>Tame Impala</ns0:artist>\

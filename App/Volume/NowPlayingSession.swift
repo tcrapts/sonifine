@@ -34,7 +34,7 @@ final class NowPlayingSession {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private let silence: AVAudioPCMBuffer
-    private let log = Logger(subsystem: "com.example.sonifine", category: "NowPlaying")
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sonifine", category: "NowPlaying")
     private var isRunning = false
     /// When the silence was last started or tried.
     private var lastStart = Date.distantPast

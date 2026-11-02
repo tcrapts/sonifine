@@ -34,7 +34,7 @@ struct SpotifyURITests {
     }
 
     /// The speaker's cover-art lookup (`/getaa?s=1&u=…`) resolved this episode URI through
-    /// the owner's Spotify account and returned its cover, and a made-up ID with a 404.
+    /// the household's Spotify account and returned its cover, and a made-up ID with a 404.
     @Test func encodesAPodcastEpisodeAsATrackOfTheAccount() throws {
         let episode = try #require(SpotifyURI("spotify:episode:0FuKEjteM0cGzy7pznCkAj"))
         let item = try #require(episode.queueItem(account: .default))

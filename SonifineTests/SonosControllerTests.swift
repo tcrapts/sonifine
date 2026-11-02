@@ -349,13 +349,13 @@ struct SOAPSonosPlayerTests {
         """
         let recorded = RecordedTransport()
         recorded.answer((200, description)) { $0.url?.path() == "/xml/device_description.xml" }
-        let player = SOAPSonosPlayer(address: URL(string: "http://192.168.1.147:1400")!, transport: recorded.transport)
+        let player = SOAPSonosPlayer(address: URL(string: "http://192.168.1.20:1400")!, transport: recorded.transport)
 
         let device = try await player.device()
 
         #expect(device == SonosDevice(id: "RINCON_000E58A0B1C201400", name: "Bookshelf", model: "S21",
                                       serialNumber: "00-0E-58-A0-B1-C2:0", softwareVersion: "86.10-81100",
-                                      hardwareVersion: "1.20.3.3-2.0", ipAddress: "192.168.1.147"))
+                                      hardwareVersion: "1.20.3.3-2.0", ipAddress: "192.168.1.20"))
     }
 
     @Test func aFaultCarriesTheSonosErrorCode() async {

@@ -4,12 +4,12 @@
 
 Sonos Radio's home started with a hard-coded "Dutch radio" row: thirteen
 Sonos Radio IDs (`tunein:4345` and so on), looked up by name at every launch
-for their logos. the owner wanted to manage that row himself: which stations, in
+for their logos. The owner wanted to manage that row themselves: which stations, in
 which order, and stations that Sonos Radio doesn't carry.
 
 On 2 November 2026 BNR through Sonos Radio took 11 to 16 seconds to start,
 sometimes longer than the app waited. A TuneIn station first asks TuneIn's ad
-network AdsWizz for a preroll; the owner's DNS filter (AdGuard) answers
+network AdsWizz for a preroll; a DNS ad filter (AdGuard) on the home network answers
 `tunein.adswizz.com` and `delivery-cdn-cf.adswizz.com` with `0.0.0.0`, so the
 speaker reports `ZPSTR_CONNECTING` and `ZPSTR_BUFFERING` in `r:streamContent`
 until the ad request gives up.

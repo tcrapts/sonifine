@@ -2,7 +2,7 @@
 
 ## Context
 
-the owner wanted Spotify's personal start page in the app, as Sonify shows it: Good
+The owner wanted Spotify's personal start page in the app, as Sonify shows it: Good
 morning with Daily Mix and Release Radar, top mixes, stations. Since November 2024
 the Spotify Web API keeps Spotify's own and algorithmic playlists from new apps.
 

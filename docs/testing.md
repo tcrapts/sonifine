@@ -34,5 +34,5 @@ by asking the speaker what it did.
 
 ## Audible tests
 
-Playback tests replace the queue and play in the owner's home. Leave the volume as
-the owner set it, and tell him what you played.
+Playback tests replace the queue and play in the owner's home. Leave the volume
+as the owner set it, and say what you played.

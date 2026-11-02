@@ -52,24 +52,63 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
 - Covers stay in memory, and those of the next three songs load ahead, so a new
   song shows its cover at once.
 
-## Layout
+## Getting started
 
-- `App/`: the Swift code and the assets. Xcode picks up every file in this
-  folder by itself.
-- `Info.plist`: the permissions for the local network, Bonjour, background audio
-  and the Spotify sign-in.
-- `Sonifine.xcodeproj/`: the Xcode project.
-- `SonifineTests/`: the unit tests.
-- `scripts/`: helper scripts, such as the one that draws the icon.
-- `docs/`: architecture, development, testing and decisions (`docs/adr/`).
+### What you need
 
-## Requirements
+- A Mac with Xcode 27 and the iOS 26 SDK.
+- An Apple account, added in Xcode under Settings → Accounts. A free account
+  works; its apps stop opening after seven days until you install again.
+- An iPhone on the same Wi-Fi as your Sonos speakers.
+- `uv`, for the scripts in `scripts/` only.
+- For the library sign-in, a Spotify developer app of your own (below).
 
-- Xcode 27 with the iOS 26 SDK.
-- An Apple account in Xcode (Settings → Accounts) to install on an iPhone.
-- `uv` for the scripts in `scripts/`.
+### Spotify
 
-## Quick start
+The app connects to Spotify in two ways ([architecture](docs/architecture.md#the-two-spotify-connections)):
+
+- **Get your Spotify home** links the app to the Spotify account in your Sonos
+  system, through Sonos's own Spotify service. It needs no setup: the Spotify
+  home, your playlists on Home, search and playback work with this link alone.
+- **Connect your library** signs in to the Spotify Web API with your own
+  developer app. It adds the Library tab, podcasts, recently played and the
+  heart for Liked Songs.
+
+To create the developer app:
+
+1. Sign in at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+   and create an app with the **Web API**.
+2. Add the redirect URI `finevolume://spotify-callback`, exactly like that.
+3. Under **User Management**, add the Spotify account you listen with.
+4. Copy the **Client ID**; it goes into `local.mk`.
+
+A new app runs in Spotify's development mode: only the accounts under User
+Management can sign in, a few at most, and all of them share one request quota
+per developer account ([KNOWN_ISSUES](KNOWN_ISSUES.md)). For one household that
+is enough.
+
+### Your settings
+
+The Makefile reads your own values from `local.mk`, which git ignores:
+
+```bash
+cp local.example.mk local.mk
+```
+
+Fill it in; `local.example.mk` explains each value:
+
+| Value | What |
+| --- | --- |
+| `TEAM` | Your Apple Team ID: Xcode → Settings → Accounts → your account. |
+| `BUNDLE_ID` | A bundle ID of your own, such as `com.yourname.sonifine`. Keep it once installed: the sign-ins live under it. |
+| `SPOTIFY_CLIENT_ID` | The Client ID of your Spotify developer app. |
+| `DEVICE` | Your iPhone's UDID, from `xcrun devicectl list devices`. |
+
+The simulator builds with an empty `local.mk`. In the Xcode app, set the same
+values on the project instead: `APP_BUNDLE_IDENTIFIER` and `SPOTIFY_CLIENT_ID`
+under Build Settings, and your team under Signing & Capabilities.
+
+### Build and install
 
 ```bash
 make build    # builds for the simulator
@@ -78,18 +117,22 @@ make device   # builds and installs on the iPhone
 make help     # lists all targets
 ```
 
-## Install on your iPhone
-
-After a change, put the app on your iPhone like this:
-
-1. Unlock the iPhone and keep it on the same Wi-Fi as the Mac, or on the cable.
-2. Run `make device`. Your sign-ins stay.
-
-The first time on a new Mac or iPhone takes a few more steps: your Apple account
-in Xcode, pairing the iPhone once over the cable with Developer Mode on, and
-trusting the developer on the iPhone.
+The first install on an iPhone takes a few more steps: pairing it once over the
+cable with Developer Mode on, and trusting the developer on the iPhone.
 [docs/development.md](docs/development.md#install-on-the-iphone) lists them,
-with fixes for the known error messages.
+with fixes for the known error messages. After that, unlock the iPhone, keep it
+on the same Wi-Fi as the Mac or on the cable, and run `make device`; your
+sign-ins stay.
 
-With a free Apple account the app stops opening after seven days; run
-`make device` again.
+## Layout
+
+- `App/`: the Swift code and the assets. Xcode picks up every file in this
+  folder by itself.
+- `Info.plist`: the permissions for the local network, Bonjour, background audio
+  and the Spotify sign-in.
+- `Sonifine.xcodeproj/`: the Xcode project.
+- `local.example.mk`: the template for `local.mk`, your own team, bundle ID,
+  Spotify client ID and iPhone.
+- `SonifineTests/`: the unit tests.
+- `scripts/`: helper scripts, such as the one that draws the icon.
+- `docs/`: architecture, development, testing and decisions (`docs/adr/`).

@@ -16,7 +16,7 @@ plus the count of the others, such as `Kitchen + 2`.
 **Coordinator**:
 The player that leads a group. Playback, the queue and the group volume go to
 the coordinator. `SonosGroup.coordinator` is its address, such as
-`http://192.168.1.147:1400`.
+`http://192.168.1.20:1400`.
 
 **Selected group**:
 The group that the volume buttons, the mini-player and Now Playing control.

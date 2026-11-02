@@ -30,7 +30,7 @@ final class SpotifyCatalog {
     private let webAPI: SpotifyWebAPI
     private let sonosService: SonosSpotifyService
     private let household: () async -> Household?
-    private let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sonifine", category: "Spotify")
 
     /// `libraryFile` keeps the last library on the iPhone.
     init(webAPI: SpotifyWebAPI, sonosService: SonosSpotifyService,

@@ -145,7 +145,7 @@ extension QueueEntry {
 }
 
 extension URL {
-    /// `http://192.168.1.147:1400/xml/device_description.xml` → `http://192.168.1.147:1400`
+    /// `http://192.168.1.20:1400/xml/device_description.xml` → `http://192.168.1.20:1400`
     var sonosPlayerURL: URL? {
         var components = URLComponents()
         components.scheme = scheme

@@ -3,7 +3,7 @@
 ## Context
 
 The first version played music with the Spotify Web API on a Spotify Connect
-device. Spotify's device list left out the owner's Symfonisk, even while it played
+device. Spotify's device list left out the Symfonisk speaker, even while it played
 Spotify, so nothing played.
 
 ## Decision

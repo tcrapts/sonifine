@@ -384,7 +384,8 @@ struct SpotifySignIn: View {
     var body: some View {
         ConnectCard(title: "Connect your library",
                     text: "Your own playlists, liked songs, albums and search.",
-                    button: "Sign in with Spotify") {
+                    button: "Sign in with Spotify",
+                    message: SpotifyWebAPI.clientID == nil ? SpotifyWebAPI.missingClientIDMessage : nil) {
             Task {
                 await catalog.signIn { url in
                     try await webAuthenticationSession.authenticate(

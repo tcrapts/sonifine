@@ -10,7 +10,15 @@ import Security
 final class SpotifyWebAPI {
     static let callbackScheme = "finevolume"
     static let redirectURI = "finevolume://spotify-callback"
-    private static let clientID = "YOUR_SPOTIFY_CLIENT_ID"
+    /// The client ID of the owner's app on developer.spotify.com: `SPOTIFY_CLIENT_ID`
+    /// in `local.mk`, which the build writes into Info.plist. Nil when the build has none.
+    static let clientID: String? = {
+        let id = Bundle.main.object(forInfoDictionaryKey: "SpotifyClientID") as? String
+        return id?.isEmpty == false ? id : nil
+    }()
+    /// What the sign-in shows when the build has no client ID.
+    static let missingClientIDMessage =
+        "This build has no Spotify client ID. Set SPOTIFY_CLIENT_ID in local.mk and build again; the README explains how."
     private static let scopes = [
         "playlist-read-private", "playlist-read-collaborative", "user-library-read",
         "user-read-recently-played", "user-library-modify", "user-read-playback-position",
@@ -50,7 +58,7 @@ final class SpotifyWebAPI {
     /// The refresh in progress. Requests that need a token meanwhile wait for it.
     private var refresh: Task<String, Error>?
 
-    private let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sonifine", category: "Spotify")
     /// After a 429 ("too many requests") the app sends nothing until then: as long as
     /// Spotify's `Retry-After` says, else a minute at first and twice as long each
     /// time Spotify refuses again, up to half an hour.
@@ -90,11 +98,12 @@ final class SpotifyWebAPI {
 
     /// Signs in through Spotify's page. `authenticate` shows it and returns the callback URL.
     func signIn(authenticate: (URL) async throws -> URL) async throws {
+        guard let clientID = Self.clientID else { throw AppError(Self.missingClientIDMessage) }
         let verifier = Self.randomVerifier()
         let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URLEncoded
         var authorize = URLComponents(string: "https://accounts.spotify.com/authorize")!
         authorize.queryItems = [
-            .init(name: "client_id", value: Self.clientID),
+            .init(name: "client_id", value: clientID),
             .init(name: "response_type", value: "code"),
             .init(name: "redirect_uri", value: Self.redirectURI),
             .init(name: "code_challenge_method", value: "S256"),
@@ -136,7 +145,7 @@ final class SpotifyWebAPI {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var form = URLComponents()
-        form.queryItems = parameters.merging(["client_id": Self.clientID]) { $1 }
+        form.queryItems = parameters.merging(["client_id": Self.clientID ?? ""]) { $1 }
             .map { URLQueryItem(name: $0.key, value: $0.value) }
         request.httpBody = Data((form.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B").utf8)
 

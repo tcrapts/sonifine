@@ -34,7 +34,7 @@ final class VolumeButtonWatcher {
 
     let volumeView = MPVolumeView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
     private let session = AVAudioSession.sharedInstance()
-    private let log = Logger(subsystem: "com.example.sonifine", category: "VolumeButtons")
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sonifine", category: "VolumeButtons")
     private var observation: NSKeyValueObservation?
 
     func start() {
