@@ -50,8 +50,10 @@ final class SonosController {
     private var householdID: String?
     private var account: SpotifyAccount
     private var radioAccount: RadioAccount?
-    /// How many times, half a second apart, the app checks whether a station plays.
+    /// How many times, half a second apart, the app checks whether a station plays:
+    /// 15 seconds, and 30 while the speaker says it connects or buffers.
     var streamStartChecks = 30
+    var streamProgressChecks = 60
     /// When the user last changed a group. Polls that started earlier are stale for it.
     private var lastAction: [String: Date] = [:]
     private var pendingVolume: (groupID: String, adjustment: Int)?
@@ -343,6 +345,12 @@ final class SonosController {
         case .episode(let episode, _): (uris, shuffle) = ([episode], false)
         case .artist, .show: return // The catalog turns an artist into songs, a show into an episode, first.
         case .station(let station): return await play(station, on: group)
+        case .stream(let url, let name, let logo):
+            return await playStream(named: name, on: group) {
+                guard try await self.start(SonosQueueItem(directStream: url, title: name, logo: logo), on: group) else {
+                    throw AppError("the stream didn't start.")
+                }
+            }
         }
         let items = uris.compactMap { $0.queueItem(account: account) }
         guard !items.isEmpty else {
@@ -397,7 +405,7 @@ final class SonosController {
             return start > 0 ? start + 1 : nil
         case .collection(_, let start?, _):
             return try await player.queue().first { $0.spotifyTrack == start }.map { $0.id + 1 }
-        case .collection, .artist, .episode, .show, .station:
+        case .collection, .artist, .episode, .show, .station, .stream:
             return nil
         }
     }
@@ -407,45 +415,60 @@ final class SonosController {
     /// uses the one it found before, else tries the likely ones until the speaker
     /// plays, and remembers that one.
     private func play(_ station: RadioItem, on group: SonosGroup) async {
+        await playStream(named: station.name, on: group) {
+            let candidates = self.radioAccount.map { [$0] + RadioAccount.likely } ?? RadioAccount.likely
+            var failure: Error?
+            for account in candidates where account != self.radioAccount || account == candidates.first {
+                guard let stream = station.stream(account: account) else { throw AppError("Sonos can't play this.") }
+                do {
+                    if try await self.start(stream, on: group) {
+                        self.remember(account)
+                        return
+                    }
+                } catch {
+                    if HTTP.isCancellation(error) { throw error }
+                    failure = error
+                }
+            }
+            throw failure ?? AppError("play a Sonos Radio station once in the Sonos app, then try again.")
+        }
+    }
+
+    /// Starts a stream on `group` instead of its queue: `attempt` returns once it
+    /// plays, or throws why not. Meanwhile the mini-player shows it is starting.
+    private func playStream(named name: String, on group: SonosGroup, _ attempt: () async throws -> Void) async {
         isStartingPlayback = true
         defer { isStartingPlayback = false }
         lastAction[group.id] = .now
-        let candidates = radioAccount.map { [$0] + RadioAccount.likely } ?? RadioAccount.likely
-        var failure: Error?
-        for account in candidates where account != radioAccount || account == candidates.first {
-            guard let stream = station.stream(account: account) else {
-                actionError = "Sonos can't play this."
-                return
-            }
-            do {
-                let player = player(group)
-                try await player.playStream(stream)
-                guard try await plays(player) else { continue }
-                remember(account)
-                statuses[group.id]?.isPlaying = true
-                actionError = nil
-                lastAction[group.id] = .now
-                await refresh([group])
-                return
-            } catch {
-                guard !HTTP.isCancellation(error) else { return }
-                failure = error
-            }
+        do {
+            try await attempt()
+            statuses[group.id]?.isPlaying = true
+            actionError = nil
+        } catch {
+            guard !HTTP.isCancellation(error) else { return }
+            actionError = "Couldn't play \(name) on \(group.name): \(error.localizedDescription)"
         }
-        actionError = "Couldn't play \(station.name) on \(group.name)"
-            + (failure.map { ": \($0.localizedDescription)" } ?? ". Play a Sonos Radio station once in the Sonos app, then try again.")
         lastAction[group.id] = .now
         await refresh([group])
     }
 
-    /// Whether the speaker plays within 15 seconds. A live stream first reports
-    /// stopped, then connects and buffers for several seconds; with a wrong account
-    /// number it keeps starting and never plays.
-    private func plays(_ player: SonosPlayer) async throws -> Bool {
-        for _ in 0..<streamStartChecks {
+    /// Plays a stream on `group` and tells whether it plays.
+    private func start(_ stream: SonosQueueItem, on group: SonosGroup) async throws -> Bool {
+        let player = player(group)
+        try await player.playStream(stream)
+        return try await plays(player, on: group)
+    }
+
+    /// Whether the speaker plays within 15 seconds, or 30 while it connects or
+    /// buffers: a TuneIn station first tries an ad, which can take over ten seconds.
+    /// With a wrong account number the speaker keeps starting and never plays.
+    private func plays(_ player: SonosPlayer, on group: SonosGroup) async throws -> Bool {
+        for check in 1...max(streamStartChecks, streamProgressChecks) {
             try await Task.sleep(for: .milliseconds(500))
             let status = try await player.status()
+            statuses[group.id]?.streamProgress = status.streamProgress
             if status.isPlaying, !status.isStarting { return true }
+            if check >= streamStartChecks, status.streamProgress == nil { return false }
         }
         return false
     }

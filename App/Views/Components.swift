@@ -194,13 +194,7 @@ struct ItemRow: View {
                     // Borderless buttons keep their own tap area inside a list row.
                     Button(action: onPlay) { label }.buttonStyle(.borderless).tint(.primary)
                     if item.queues {
-                        Menu { QueueButtons(item: item) } label: {
-                            Image(systemName: "ellipsis").foregroundStyle(.secondary)
-                                .frame(width: 36, height: 44).contentShape(.rect)
-                        }
-                        .buttonStyle(.borderless)
-                        .tint(.secondary)
-                        .accessibilityLabel("More for \(item.name)")
+                        MoreMenu(name: item.name) { QueueButtons(item: item) }
                     }
                 }
             }
@@ -233,6 +227,22 @@ struct ItemRow: View {
             Spacer(minLength: 0)
         }
         .contentShape(.rect)
+    }
+}
+
+/// The ⋯ at the end of a row, with the actions for its item.
+struct MoreMenu<Actions: View>: View {
+    let name: String
+    @ViewBuilder let actions: () -> Actions
+
+    var body: some View {
+        Menu(content: actions) {
+            Image(systemName: "ellipsis").foregroundStyle(.secondary)
+                .frame(width: 36, height: 44).contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .tint(.secondary)
+        .accessibilityLabel("More for \(name)")
     }
 }
 

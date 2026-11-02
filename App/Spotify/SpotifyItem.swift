@@ -75,6 +75,8 @@ enum PlayRequest: Equatable {
     case show(SpotifyItem)
     /// A Sonos Radio station, which plays instead of the queue.
     case station(RadioItem)
+    /// A station's own stream, from its address; it plays instead of the queue.
+    case stream(URL, name: String, logo: URL?)
 
     /// The request for a tap on `item`.
     ///

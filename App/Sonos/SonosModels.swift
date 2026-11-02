@@ -90,6 +90,8 @@ struct GroupStatus: Equatable {
     var spotifyAccount: SpotifyAccount?
     /// The station, when the group plays radio instead of its queue.
     var station: String?
+    /// How far a stream that is starting got; nil once it plays, and for songs.
+    var streamProgress: StreamProgress?
     /// The household's Sonos Radio account, when the group plays a Sonos Radio station.
     var radioAccount: RadioAccount?
     /// The song's place in the queue, counted from 1.
@@ -123,6 +125,20 @@ struct GroupStatus: Equatable {
         let drift = abs(a.position(at: .now) - b.position(at: .now))
         (a.position, a.positionDate, b.position, b.positionDate) = (0, .distantPast, 0, .distantPast)
         return a != b || drift > 2
+    }
+}
+
+/// A stream on its way: Sonos says so in `r:streamContent` of `GetPositionInfo`.
+/// A TuneIn station first tries an ad, so it can connect for over ten seconds.
+enum StreamProgress: String {
+    case connecting = "ZPSTR_CONNECTING"
+    case buffering = "ZPSTR_BUFFERING"
+
+    var label: String {
+        switch self {
+        case .connecting: "Connecting…"
+        case .buffering: "Buffering…"
+        }
     }
 }
 
@@ -203,15 +219,23 @@ extension SonosQueueItem {
     /// An item of a music service. The metadata names the service as
     /// `SA_RINCON<type>_X_#Svc<type>-0-Token`, where the type is the service ID × 256 + 7.
     init(uri: String, itemID: String, title: String = "", upnpClass: String, serviceType: Int) {
+        self.init(uri: uri, itemID: itemID, title: title, upnpClass: upnpClass,
+                  service: "SA_RINCON\(serviceType)_X_#Svc\(serviceType)-0-Token")
+    }
+
+    /// A URI with one DIDL-Lite item as its metadata. `service` names where it
+    /// comes from; `artwork` becomes its `upnp:albumArtURI`.
+    init(uri: String, itemID: String, parentID: String = "-1", title: String, upnpClass: String,
+         artwork: URL? = nil, service: String) {
+        let albumArt = artwork.map { "<upnp:albumArtURI>\($0.absoluteString.xmlEscaped)</upnp:albumArtURI>" } ?? ""
         let metadata = """
         <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" \
         xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" \
         xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" \
         xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">\
-        <item id="\(itemID)" parentID="-1" restricted="true"><dc:title>\(title.xmlEscaped)</dc:title>\
-        <upnp:class>\(upnpClass)</upnp:class>\
-        <desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">\
-        SA_RINCON\(serviceType)_X_#Svc\(serviceType)-0-Token</desc></item></DIDL-Lite>
+        <item id="\(itemID)" parentID="\(parentID)" restricted="true"><dc:title>\(title.xmlEscaped)</dc:title>\
+        <upnp:class>\(upnpClass)</upnp:class>\(albumArt)\
+        <desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">\(service)</desc></item></DIDL-Lite>
         """
         self.init(uri: uri, metadata: metadata)
     }

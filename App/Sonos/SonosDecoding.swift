@@ -94,8 +94,11 @@ extension GroupStatus {
         let source = media?.value("CurrentURIMetaData").flatMap { XMLNode.parse($0) }
         let track = position.value("TrackMetaData").flatMap { XMLNode.parse($0) }
         let state = transport.value("CurrentTransportState")
-        // Radio puts the station in the title and the song in `streamContent`.
-        let stream = track?.value("streamContent").flatMap { $0.isEmpty ? nil : $0 }
+        // Radio puts the station in the title and the song in `streamContent`; while a
+        // stream starts, `streamContent` says how far it got instead.
+        let streamContent = track?.value("streamContent") ?? ""
+        let progress = StreamProgress(rawValue: streamContent)
+        let stream = streamContent.isEmpty || progress != nil ? nil : streamContent
         // A live stream may carry its file name as the title, such as
         // `BNR_NIEUWSRADIOAAC.aac?dist=tunein&…`, which is part of its address: leave it out.
         let address = track?.value("res") ?? ""
@@ -113,10 +116,13 @@ extension GroupStatus {
             title: stream ?? title ?? "",
             artist: stream != nil ? title ?? "" : track?.value("creator") ?? track?.value("album") ?? "",
             album: track?.value("album") ?? "",
-            artworkURL: track?.value("albumArtURI").flatMap { URL(sonosArtwork: $0, player: player) },
+            // A station's own stream has no artwork; the logo the app gave it comes back with the source.
+            artworkURL: (track?.value("albumArtURI") ?? (isRadio ? source?.value("albumArtURI") : nil))
+                .flatMap { URL(sonosArtwork: $0, player: player) },
             spotifyTrack: SpotifyURI(sonosTrackURI: trackURI),
             spotifyAccount: SpotifyAccount(sonosTrackURI: trackURI),
             station: isRadio ? source?.value("title") ?? title ?? "Radio" : nil,
+            streamProgress: progress,
             radioAccount: RadioAccount(sonosURI: sourceURI) ?? RadioAccount(sonosURI: trackURI),
             queuePosition: position.value("Track").flatMap(Int.init) ?? 0,
             playMode: settings?.value("PlayMode").map(PlayMode.init(sonos:)) ?? .normal,

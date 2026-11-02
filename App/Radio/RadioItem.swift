@@ -94,3 +94,17 @@ struct RadioAccount: Equatable {
         self.init(accountNumber: accountNumber)
     }
 }
+
+extension SonosQueueItem {
+    /// A station's own stream, played from its address without a music service or
+    /// account: `https://stream.bnr.nl/bnr_mp3_128_20` becomes
+    /// `x-rincon-mp3radio://https://stream.bnr.nl/bnr_mp3_128_20`. The metadata is
+    /// that of a radio address added by hand (TuneIn's type, 254 × 256 + 7, without
+    /// an account). The speaker reports no artwork for such a stream, so the logo
+    /// goes along; `GetMediaInfo` gives it back.
+    init(directStream url: URL, title: String, logo: URL?) {
+        self.init(uri: "x-rincon-mp3radio://\(url.absoluteString)", itemID: "R:0/0/0", parentID: "R:0/0",
+                  title: title, upnpClass: "object.item.audioItem.audioBroadcast", artwork: logo,
+                  service: "SA_RINCON65031_")
+    }
+}

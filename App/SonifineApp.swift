@@ -5,6 +5,7 @@ struct SonifineApp: App {
     @State private var sonos: SonosController
     @State private var catalog: SpotifyCatalog
     @State private var radio = RadioCatalog(service: SonosRadioService())
+    @State private var favourites = Favourites()
     @State private var watcher = VolumeButtonWatcher()
     @State private var nowPlaying: NowPlayingSession
     @Environment(\.scenePhase) private var scenePhase
@@ -42,6 +43,7 @@ struct SonifineApp: App {
             .environment(sonos)
             .environment(catalog)
             .environment(radio)
+            .environment(favourites)
             .environment(\.play, PlayAction { request in Task { await play(request) } })
             .environment(\.addToQueue, QueueAction { uri, next in Task { await sonos.addToQueue(uri, next: next) } })
             .background(HiddenVolumeView(watcher: watcher).frame(width: 1, height: 1))

@@ -9,6 +9,7 @@ through one `\.play` action.
 | `SonosController` | `App/Sonos/` | `SonosPlayer`: `SOAPSonosPlayer` talks UPnP to a player |
 | `SpotifyCatalog` | `App/Spotify/` | `SpotifyWebAPI` (library sign-in), `SonosSpotifyService` (link) |
 | `RadioCatalog` | `App/Radio/` | `SonosRadioService`: Sonos Radio, without sign-in |
+| `Favourites` | `App/Radio/` | `UserDefaults`: the favourite stations, in the user's order |
 
 `App/Support/` holds the seams every adapter shares: `HTTPTransport`,
 `SecretStore` (the Keychain), `XMLNode`, the one XML reader, and `SMAPI`, the
@@ -20,7 +21,7 @@ of the next three songs in the queue (`SonosController.upcomingArtwork`).
 `App/Volume/NowPlayingSession` keeps the buttons and the lock screen for the app.
 `PlayRequest` decides what a tap plays; `SpotifyURI` parses every Spotify URI
 and encodes it for the Sonos queue; `RadioItem` encodes a station for the
-transport URI.
+transport URI, and `SonosQueueItem(directStream:)` a custom stream.
 
 ## Sonos
 
@@ -35,8 +36,12 @@ transport URI.
 - **Status.** `refresh()` reads the status of every group every three seconds
   and after each action: volume, transport state, position, play mode, the
   track metadata and, from `GetMediaInfo`, the source. A `CurrentURI` such as
-  `x-sonosapi-radio:` or `x-sonosapi-stream:` means radio: `GroupStatus.station`
-  holds the station from `CurrentURIMetaData`.
+  `x-sonosapi-radio:`, `x-sonosapi-stream:` or `x-rincon-mp3radio:` means radio:
+  `GroupStatus.station` holds the station from `CurrentURIMetaData`, and its
+  `albumArtURI` is the cover when the track has none. A title that is a file
+  name, such as `BNR_NIEUWSRADIO.mp3?dist=other`, is left out. While a stream
+  starts, `r:streamContent` says `ZPSTR_CONNECTING` or `ZPSTR_BUFFERING`
+  (`GroupStatus.streamProgress`).
 - **Room sound and devices.** Bass, treble, loudness and Trueplay belong to a
   room, so they go to the room's own player:
   `RenderingControl` `GetBass`/`SetBass`, `GetTreble`/`SetTreble`,
@@ -88,6 +93,29 @@ The account number comes from a Sonos Radio URI a group played, stored under
 `GET https://sali.sonos.superhi.fi/browse/v1` for the home rows and SOAP
 `getMetadata` (a category) and `search` (`id` `stations`) on
 `https://sali.sonos.superhi.fi/smapi`.
+
+A station counts as playing once the speaker reports `PLAYING`: after 15
+seconds without, or 30 while it connects or buffers, the app tries the next
+account number. A TuneIn station first asks for an ad, which a DNS filter can
+hold up for over ten seconds.
+
+## Favourites
+
+The Sonos Radio home starts with the user's favourites, as
+[ADR 0007](adr/0007-favourites-with-two-sources.md) explains. `Favourites`
+(`App/Radio/Favourites.swift`) keeps them as JSON in `UserDefaults` under
+`radioFavourites`; the first launch fills in thirteen Dutch custom streams.
+`FavouritesView` puts them in order, removes, edits and adds them; a Sonos
+Radio station's ⋯ or touch-and-hold menu adds it.
+
+| Source | Plays as |
+| --- | --- |
+| Sonos Radio station | `PlayRequest.station`, as above |
+| Custom stream `<address>` | `PlayRequest.stream`: `x-rincon-mp3radio://<address>` with item `R:0/0/0`, service `SA_RINCON65031_` and the logo as `upnp:albumArtURI` |
+
+`StreamCheck` checks a new custom stream: an http or https address, which
+answers with an audio type. It reads the headers and first bytes of an https
+address; iOS keeps the app from http addresses, which it keeps unchecked.
 
 While radio plays, Now Playing hides the progress and turns off shuffle and repeat; the
 covers ahead and beside come from no queue.

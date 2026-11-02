@@ -19,9 +19,15 @@ steps, 1 on a scale of 100 by default. Set the step size under **System → ⚙�
   sort. A list that mixes kinds, such as stations and categories, has filter
   chips. Play, Shuffle and a tapped song play the songs as the list shows them.
 - At the top of Home you choose **Spotify** or **Sonos Radio**. Sonos Radio shows
-  Dutch radio first (NPO, Qmusic, 538, Sky Radio and more), then its rows of
-  stations, then Music, News & Talk, Sports and Locations to browse.
-  The ▶ on a station plays it on the selected room instead of the queue.
+  your **Favourites** first, then its rows of stations, then Music, News & Talk,
+  Sports and Locations to browse. The ▶ on a station plays it on the selected
+  room instead of the queue.
+- **Favourites** starts with thirteen Dutch stations (NPO, BNR, Qmusic, 538, Sky
+  Radio and more) as their own streams, which start in seconds and without ads.
+  Tap the **Favourites** title to manage them: **Edit** to drag them in order or
+  remove them, tap one to change its name, logo or address, and **+** to add a
+  Sonos Radio station or a custom stream. The ⋯ of a Sonos Radio station, or
+  touch and hold on its cover, adds it to your favourites.
 - **Search** searches all of Spotify for songs, artists, albums, playlists and
   podcasts (the **Podcasts** filter shows shows and episodes), and Sonos Radio
   for stations (the **Radio** filter).

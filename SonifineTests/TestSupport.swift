@@ -107,8 +107,15 @@ final class FakeSonosPlayer: SonosPlayer {
     func zoneGroups() async throws -> [SonosGroup] { groups }
     func householdID() async throws -> String { "Sonos_Household" }
 
+    /// How many status answers say a stream is still buffering, as a TuneIn station does while it tries an ad.
+    var bufferingAnswers = 0
+
     func status() async throws -> GroupStatus {
-        let answer = status
+        var answer = status
+        if bufferingAnswers > 0 {
+            bufferingAnswers -= 1
+            (answer.isStarting, answer.streamProgress) = (true, .buffering)
+        }
         try await Task.sleep(for: statusDelay)
         return answer
     }

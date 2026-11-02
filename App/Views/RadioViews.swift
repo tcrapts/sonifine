@@ -6,6 +6,8 @@ enum RadioPage: Hashable {
     case home
     /// The stations and categories in one category.
     case category(RadioItem)
+    /// The user's favourite stations, to manage.
+    case favourites
 }
 
 struct RadioPageView: View {
@@ -15,17 +17,18 @@ struct RadioPageView: View {
         switch page {
         case .home: RadioHomeView()
         case .category(let category): RadioCategoryView(category: category)
+        case .favourites: FavouritesView()
         }
     }
 }
 
-/// The Sonos Radio home: rows of stations, then the categories to browse.
+/// The Sonos Radio home: the favourites, rows of stations, then the categories to browse.
 private struct RadioHomeView: View {
     @Environment(RadioCatalog.self) private var radio
 
     var body: some View {
         List {
-            StationShelf(title: "Dutch radio", items: radio.dutch)
+            FavouritesShelf()
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             ForEach(radio.shelves) { shelf in
@@ -65,12 +68,12 @@ private struct RadioCategoryView: View {
     }
 }
 
-/// Sonos Radio on the start screen: its rows of stations, then its categories.
+/// Sonos Radio on the start screen: the favourites, its rows of stations, then its categories.
 struct RadioHomeContent: View {
     @Environment(RadioCatalog.self) private var radio
 
     var body: some View {
-        StationShelf(title: "Dutch radio", items: radio.dutch)
+        FavouritesShelf()
         ForEach(radio.shelves) { shelf in
             if shelf.items.contains(where: \.isStation) {
                 StationShelf(title: shelf.title, items: shelf.items)
@@ -94,12 +97,30 @@ struct RadioHomeContent: View {
     }
 }
 
+/// The user's favourite stations, first on Sonos Radio. The title opens them to
+/// put in order, edit, remove and add to.
+private struct FavouritesShelf: View {
+    @Environment(Favourites.self) private var favourites
+
+    var body: some View {
+        if favourites.all.isEmpty {
+            NavigationLink(value: RadioPage.favourites) {
+                Label("Add favourite stations", systemImage: "star").font(.headline)
+            }
+            .padding(.horizontal)
+        } else {
+            StationShelf(title: "Favourites", items: favourites.all, more: .favourites) { FavouriteCard(favourite: $0) }
+        }
+    }
+}
+
 /// A titled, horizontal row of station cards.
-struct StationShelf: View {
+struct StationShelf<Item: Identifiable, Card: View>: View {
     let title: String
-    let items: [RadioItem]
-    /// The page the title opens, such as the whole Sonos Radio home.
+    let items: [Item]
+    /// The page the title opens, such as the favourites to manage.
     var more: RadioPage?
+    @ViewBuilder let card: (Item) -> Card
 
     var body: some View {
         if !items.isEmpty {
@@ -121,7 +142,7 @@ struct StationShelf: View {
                 .padding(.horizontal)
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 14) {
-                        ForEach(items) { RadioCard(item: $0) }
+                        ForEach(items) { card($0) }
                     }
                     .padding(.horizontal)
                 }
@@ -130,14 +151,38 @@ struct StationShelf: View {
     }
 }
 
-/// A station's logo with its name; the round button plays it. A category opens.
-private struct RadioCard: View {
-    let item: RadioItem
+extension StationShelf where Item == RadioItem, Card == RadioCard {
+    /// A row of Sonos Radio stations and categories.
+    init(title: String, items: [RadioItem]) {
+        self.init(title: title, items: items) { RadioCard(item: $0) }
+    }
+}
+
+/// A logo with a name and a line below it, as on a shelf.
+private struct CoverCard<Cover: View>: View {
+    let name: String
+    let subtitle: String
     var size: CGFloat = 150
-    @Environment(\.play) private var play
+    @ViewBuilder let cover: () -> Cover
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            cover().frame(width: size, height: size)
+            Text(name).font(.subheadline.bold()).lineLimit(1)
+            Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(width: size)
+    }
+}
+
+/// A station's logo with its name; the round button plays it. A category opens.
+/// Touch and hold a station to add it to the favourites or take it out.
+struct RadioCard: View {
+    let item: RadioItem
+    @Environment(\.play) private var play
+
+    var body: some View {
+        CoverCard(name: item.name, subtitle: item.subtitle) {
             if item.isStation {
                 ZStack(alignment: .bottomTrailing) {
                     cover
@@ -146,18 +191,50 @@ private struct RadioCard: View {
             } else {
                 NavigationLink(value: RadioPage.category(item)) { cover }.buttonStyle(.plain)
             }
-            Text(item.name).font(.subheadline.bold()).lineLimit(1)
-            Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
-        .frame(width: size)
+        .contextMenu { if item.isStation { FavouriteToggle(station: item) } }
     }
 
-    private var cover: some View {
-        Artwork(url: item.imageURL, cornerRadius: 8).frame(width: size, height: size)
+    private var cover: some View { Artwork(url: item.imageURL, cornerRadius: 8) }
+}
+
+/// A favourite's logo with its name and source; the round button plays it.
+private struct FavouriteCard: View {
+    let favourite: Favourite
+    @Environment(Favourites.self) private var favourites
+    @Environment(\.play) private var play
+
+    var body: some View {
+        CoverCard(name: favourite.name, subtitle: favourite.sourceLabel) {
+            ZStack(alignment: .bottomTrailing) {
+                Artwork(url: favourite.logoURL, cornerRadius: 8)
+                PlayCircle(name: favourite.name) { play(favourite.playRequest) }
+            }
+        }
+        .contextMenu {
+            Button("Remove from Favourites", systemImage: "star.slash", role: .destructive) {
+                favourites.remove(favourite)
+            }
+        }
     }
 }
 
-/// A station or category in a list. Tap a station to play it; a category opens.
+/// Adds a Sonos Radio station to the favourites, or takes it out.
+struct FavouriteToggle: View {
+    let station: RadioItem
+    @Environment(Favourites.self) private var favourites
+
+    var body: some View {
+        if favourites.contains(station) {
+            Button("Remove from Favourites", systemImage: "star.slash") { favourites.toggle(station) }
+        } else {
+            Button("Add to Favourites", systemImage: "star") { favourites.toggle(station) }
+        }
+    }
+}
+
+/// A station or category in a list. Tap a station to play it; its ⋯ menu adds it
+/// to the favourites. A category opens.
 struct RadioRow: View {
     let item: RadioItem
     @Environment(SonosController.self) private var sonos
@@ -168,31 +245,53 @@ struct RadioRow: View {
 
     var body: some View {
         if item.isStation {
-            Button { play(.station(item)) } label: { label }.buttonStyle(.borderless).tint(.primary)
+            HStack(spacing: 0) {
+                Button { play(.station(item)) } label: { RadioLabel(item: item, isCurrent: isCurrent) }
+                    .buttonStyle(.borderless).tint(.primary)
+                MoreMenu(name: item.name) { FavouriteToggle(station: item) }
+            }
+            .contextMenu { FavouriteToggle(station: item) }
         } else {
-            NavigationLink(value: RadioPage.category(item)) { label }
+            NavigationLink(value: RadioPage.category(item)) { RadioLabel(item: item) }
         }
     }
+}
 
-    private var label: some View {
+/// A station's logo, or a category's icon, with its name and a line below it, as in a list.
+struct RadioLabel: View {
+    let name: String
+    let subtitle: String
+    let imageURL: URL?
+    var isCategory = false
+    /// Green, as the station that plays now.
+    var isCurrent = false
+
+    var body: some View {
         HStack(spacing: 12) {
-            if item.isStation {
-                Artwork(url: item.imageURL, cornerRadius: 4).frame(width: 48, height: 48)
-            } else {
+            if isCategory {
                 // The category icons are white line drawings.
-                CachedImage(url: item.imageURL) { Image(systemName: "dot.radiowaves.left.and.right") }
+                CachedImage(url: imageURL) { Image(systemName: "dot.radiowaves.left.and.right") }
                     .padding(8)
                     .frame(width: 48, height: 48)
                     .background(Color.accent.gradient, in: .rect(cornerRadius: 4))
+            } else {
+                Artwork(url: imageURL, cornerRadius: 4).frame(width: 48, height: 48)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).lineLimit(1).foregroundStyle(isCurrent ? Color.accent : .primary)
-                if !item.subtitle.isEmpty {
-                    Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(name).lineLimit(1).foregroundStyle(isCurrent ? Color.accent : .primary)
+                if !subtitle.isEmpty {
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
         }
         .contentShape(.rect)
+    }
+}
+
+extension RadioLabel {
+    init(item: RadioItem, isCurrent: Bool = false) {
+        self.init(name: item.name, subtitle: item.subtitle, imageURL: item.imageURL,
+                  isCategory: !item.isStation, isCurrent: isCurrent)
     }
 }

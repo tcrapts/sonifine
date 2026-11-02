@@ -233,6 +233,67 @@ struct RadioPlaybackTests {
         #expect(fake.streams.count == 4)
     }
 
+    @Test func aStationThatBuffersLongIsGivenTimeBeforeAnotherNumber() async {
+        let controller = await controller()
+        (controller.streamStartChecks, controller.streamProgressChecks) = (2, 8)
+        fake.status.radioAccount = RadioAccount(accountNumber: "2")
+        fake.status.isPlaying = true
+        await controller.refresh()
+        // BNR through TuneIn buffers while its ad fails, longer than a station that hangs is given.
+        fake.bufferingAnswers = 5
+
+        await controller.play(.station(station("tunein:4345", "BNR Nieuwsradio")))
+
+        #expect(fake.streams.map(\.uri) == ["x-sonosapi-stream:tunein%3a4345?sid=303&flags=8232&sn=2"])
+        #expect(controller.errorMessage == nil)
+    }
+
+    @Test func aCustomStreamPlaysFromItsOwnAddressAndLeavesTheQueue() async throws {
+        let controller = await controller()
+        let logo = URL(string: "https://cdn-profiles.tunein.com/s1993/images/logog.png")!
+        let bnr = Favourite(name: "BNR Nieuwsradio", logoURL: logo,
+                            source: .stream(URL(string: "https://stream.bnr.nl/bnr_mp3_128_20")!))
+
+        await controller.play(try #require(bnr.playRequest))
+
+        let stream = try #require(fake.streams.first)
+        #expect(fake.streams.count == 1, "a custom stream needs no account to try")
+        #expect(stream.uri == "x-rincon-mp3radio://https://stream.bnr.nl/bnr_mp3_128_20")
+        // The metadata that played BNR on the Symfonisk, with the logo for the cover.
+        let item = try #require(XMLNode.parse(stream.metadata)?.first("item"))
+        #expect(item.attributes["id"] == "R:0/0/0" && item.attributes["parentID"] == "R:0/0")
+        #expect(item.value("title") == "BNR Nieuwsradio")
+        #expect(item.value("class") == "object.item.audioItem.audioBroadcast")
+        #expect(item.value("desc") == "SA_RINCON65031_")
+        #expect(item.value("albumArtURI") == logo.absoluteString)
+        #expect(fake.queuedItems.isEmpty && fake.additions.isEmpty)
+        #expect(controller.errorMessage == nil)
+    }
+
+    @Test func aCustomStreamThatDoesNotStartSaysSo() async throws {
+        let controller = await controller()
+        controller.streamStartChecks = 2
+        fake.playsStream = { _ in false }
+        let gone = Favourite(name: "Gone FM", source: .stream(URL(string: "https://example.com/gone.mp3")!))
+
+        await controller.play(try #require(gone.playRequest))
+
+        #expect(fake.streams.count == 1)
+        #expect(controller.errorMessage == "Couldn't play Gone FM on Kitchen: the stream didn't start.")
+    }
+
+    @Test func aSonosRadioFavouritePlaysAsTheStationDoes() async throws {
+        let controller = await controller()
+        fake.status.radioAccount = RadioAccount(accountNumber: "2")
+        fake.status.isPlaying = true
+        await controller.refresh()
+        let favourite = Favourite(name: "NPO Radio 2", source: .sonosRadio("tunein:5668"))
+
+        await controller.play(try #require(favourite.playRequest))
+
+        #expect(fake.streams.map(\.uri) == ["x-sonosapi-stream:tunein%3a5668?sid=303&flags=8232&sn=2"])
+    }
+
     @Test func radioTakesNoCoversFromTheQueue() async {
         let controller = await controller()
         fake.queueEntries = (0..<4).map {
@@ -309,6 +370,46 @@ struct RadioStatusTests {
             """), trackMetadata: track)
 
         #expect(status.displayTitle == "SLAM!")
+    }
+
+    /// The media info of a custom stream, as the app sets it.
+    private func customStream(logo: URL?) -> String {
+        let stream = SonosQueueItem(directStream: URL(string: "https://stream.bnr.nl/bnr_mp3_128_20")!,
+                                    title: "BNR Nieuwsradio", logo: logo)
+        return soapAnswer("GetMediaInfo", """
+            <NrTracks>1</NrTracks><CurrentURI>\(xmlEscaped(stream.uri))</CurrentURI>\
+            <CurrentURIMetaData>\(xmlEscaped(stream.metadata))</CurrentURIMetaData>
+            """)
+    }
+
+    @Test func aCustomStreamShowsTheFavouriteWithItsLogo() {
+        let logo = URL(string: "https://cdn-profiles.tunein.com/s1993/images/logog.png")!
+        // As the Symfonisk reported BNR's own stream: its file name as the title, and no artwork.
+        let track = """
+        <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" \
+        xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">\
+        <item id="-1" parentID="-1" restricted="true"><res protocolInfo="x-rincon-mp3radio:*:*:*">\
+        x-rincon-mp3radio://https://28513.live.streamtheworld.com:443/BNR_NIEUWSRADIO.mp3?dist=other</res>\
+        <r:streamContent></r:streamContent><dc:title>BNR_NIEUWSRADIO.mp3?dist=other</dc:title>\
+        <upnp:class>object.item</upnp:class></item></DIDL-Lite>
+        """
+        let status = status(media: customStream(logo: logo), trackMetadata: track)
+
+        #expect(status.displayTitle == "BNR Nieuwsradio" && status.playsRadio)
+        #expect(status.artworkURL == logo)
+        #expect(status.radioAccount == nil)
+    }
+
+    @Test func aStreamThatConnectsSaysSoInsteadOfATitle() {
+        let track = """
+        <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" \
+        xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1">\
+        <r:streamContent>ZPSTR_CONNECTING</r:streamContent></item></DIDL-Lite>
+        """
+        let status = status(media: customStream(logo: nil), trackMetadata: track)
+
+        #expect(status.streamProgress == .connecting)
+        #expect(status.displayTitle == "BNR Nieuwsradio")
     }
 
     @Test func theQueueIsNoRadio() {

@@ -89,3 +89,11 @@ leaves the queue as it was.
 **Sonos Radio account**:
 The household's account for Sonos Radio, account number `sn`, which differs per
 household. The app reads it from a Sonos Radio station a group plays.
+
+**Favourite**:
+A station the user keeps first on the Sonos Radio home, in the user's order:
+a Sonos Radio station or a custom stream, with a name and a logo.
+
+**Custom stream**:
+A station's own audio address, such as `https://stream.bnr.nl/bnr_mp3_128_20`.
+It plays as `x-rincon-mp3radio://<address>`, without TuneIn, its ads or an account.

@@ -8,7 +8,7 @@
 
 ## Writing
 
-- Write in English, except `README.md`, which is Dutch.
+- Write in English, the README included.
 - Keep one topic per page and link instead of repeating.
 - Use positive phrasing: say what it is.
 - Record a decision with lasting consequences as an ADR in `adr/`, numbered on.

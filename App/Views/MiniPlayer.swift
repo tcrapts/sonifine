@@ -18,7 +18,7 @@ struct MiniPlayer: View {
                 } else if let notice = sonos.notice {
                     Label(notice, systemImage: "checkmark").lineLimit(1)
                 } else if sonos.isStartingPlayback {
-                    Text("Starting…")
+                    Text(status.streamProgress?.label ?? "Starting…")
                 } else {
                     Text(sonos.selectedGroup == nil ? "Looking for your Sonos…" : status.displayTitle).lineLimit(1)
                 }
