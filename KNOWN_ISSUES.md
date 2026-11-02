@@ -4,8 +4,9 @@
 
 - **Description:** since July 2026 Spotify gives development-mode apps one quota per
   developer account, and answers 429 with `QUOTA_EXCEEDED` when it is used up. It
-  doesn't say how large it is or when it resets. On 1 November 2026 a day of
-  simulator and subagent tests used it up, and the library stayed empty.
+  doesn't say how large it is; its `Retry-After` header says when to ask again,
+  about two hours on 2 November 2026. On 1 November 2026 a day of simulator and
+  subagent tests used it up, and the library stayed empty.
 - **Impact:** the library, search, podcasts and the heart stop working until the
   quota resets. Sonos playback keeps working.
 - **Affected code:** `App/Spotify/SpotifyWebAPI.swift`, `App/Spotify/SpotifyCatalog.swift`.

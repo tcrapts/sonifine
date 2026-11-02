@@ -83,10 +83,10 @@ final class SonosSpotifyService {
             var request = URLRequest(url: Self.browse, timeoutInterval: 10)
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            let (data, status) = try await transport(request)
-            if status == 401 { throw KeyExpired() }
-            guard status == 200 else { throw AppError("The Spotify home didn't load (\(status)).") }
-            return try JSONDecoder().decode(SMAPIBrowsePage.self, from: data)
+            let reply = try await transport(request)
+            if reply.status == 401 { throw KeyExpired() }
+            guard reply.status == 200 else { throw AppError("The Spotify home didn't load (\(reply.status)).") }
+            return try JSONDecoder().decode(SMAPIBrowsePage.self, from: reply.data)
         }
         return page.views.filter { $0.id.objectId != "yourmusic_root" }.compactMap { view in
             let items = view.items?.compactMap(\.spotifyItem) ?? []
@@ -216,9 +216,9 @@ final class SonosSpotifyService {
         let request = SMAPI.request(Self.service, action: action, body: body, credentials: """
             <deviceId>\(deviceID)</deviceId><deviceProvider>Sonos</deviceProvider>\(login)
             """)
-        let (data, status) = try await transport(request)
-        let response = XMLNode.parse(data)
-        guard status == 200, let response else {
+        let reply = try await transport(request)
+        let response = XMLNode.parse(reply.data)
+        guard reply.status == 200, let response else {
             let fault = response?.value("faultcode") ?? ""
             if fault.contains("TokenRefreshRequired") || fault.contains("AuthTokenExpired") {
                 // The renewed key comes in the fault's details.
@@ -229,7 +229,7 @@ final class SonosSpotifyService {
                 unlink()
                 throw AppError("Connect Spotify again.")
             }
-            throw AppError("Spotify on Sonos: \(action) failed (\(fault.isEmpty ? String(status) : fault)).")
+            throw AppError("Spotify on Sonos: \(action) failed (\(fault.isEmpty ? String(reply.status) : fault)).")
         }
         return response
     }

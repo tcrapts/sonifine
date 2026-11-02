@@ -182,8 +182,8 @@ final class SOAPSonosPlayer: SonosPlayer {
 
     func device() async throws -> SonosDevice {
         let request = URLRequest(url: address.appending(path: "/xml/device_description.xml"), timeoutInterval: 4)
-        let (data, status) = try await transport(request)
-        guard status == 200, let description = XMLNode.parse(data) else {
+        let reply = try await transport(request)
+        guard reply.status == 200, let description = XMLNode.parse(reply.data) else {
             throw AppError("\(address.host() ?? "The speaker") gave no device description.")
         }
         return SonosDevice(description: description, address: address)
@@ -208,9 +208,9 @@ final class SOAPSonosPlayer: SonosPlayer {
         request.setValue("\"\(service.urn)#\(action)\"", forHTTPHeaderField: "SOAPACTION")
         request.httpBody = Data(envelope.utf8)
 
-        let (data, status) = try await transport(request)
-        let response = XMLNode.parse(data)
-        guard status == 200, let response else {
+        let reply = try await transport(request)
+        let response = XMLNode.parse(reply.data)
+        guard reply.status == 200, let response else {
             let code = response?.value("errorCode").flatMap(Int.init)
             throw AppError("\(action) failed on \(address.host() ?? "the speaker")\(code.map { " (error \($0))" } ?? "")",
                            code: code)

@@ -25,22 +25,27 @@ final class SpotifyCatalog {
 
     private(set) var errorMessage: String?
     /// Why the podcasts didn't load, such as Spotify's quota, while the rest of the library did.
-    private(set) var podcastsMessage: String?
+    private(set) var podcastsProblem: PodcastsProblem?
 
     private let webAPI: SpotifyWebAPI
     private let sonosService: SonosSpotifyService
     private let household: () async -> Household?
+    private let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
 
-    init(webAPI: SpotifyWebAPI, sonosService: SonosSpotifyService, household: @escaping () async -> Household?) {
+    /// `libraryFile` keeps the last library on the iPhone.
+    init(webAPI: SpotifyWebAPI, sonosService: SonosSpotifyService,
+         libraryFile: URL = URL.applicationSupportDirectory.appending(path: "spotify-library.json"),
+         household: @escaping () async -> Household?) {
         self.webAPI = webAPI
         self.sonosService = sonosService
+        self.libraryFile = libraryFile
         self.household = household
         isSignedIn = webAPI.isSignedIn
         isLinked = sonosService.isLinked
-        if isSignedIn || isLinked, let saved = Self.savedLibrary() {
+        if isSignedIn || isLinked, let saved = savedLibrary() {
             (library, libraryAsked) = saved
         }
-        podcastsMessage = webAPI.refusal
+        podcastsProblem = webAPI.pause.map(PodcastsProblem.paused)
         webAPI.onSignedOut = { [weak self] in self?.signedOut() }
     }
 
@@ -66,7 +71,8 @@ final class SpotifyCatalog {
     private func signedOut() {
         isSignedIn = false
         library = SpotifyWebAPI.Library()
-        try? FileManager.default.removeItem(at: Self.libraryFile)
+        (podcastsLoaded, recentlyPlayedLoaded, podcastsProblem) = (false, false, nil)
+        try? FileManager.default.removeItem(at: libraryFile)
         searchResults = SpotifySearchResults()
     }
 
@@ -110,9 +116,13 @@ final class SpotifyCatalog {
 
     /// When the library was last asked for, loaded or not.
     private var libraryAsked = Date.distantPast
+    /// Whether the podcasts and recently played loaded since the app started; until
+    /// then an empty list may be a refusal, and they are asked again.
+    private var podcastsLoaded = false
+    private var recentlyPlayedLoaded = false
     /// The last library Spotify gave, kept on the iPhone, so the app shows it at once
     /// and asks Spotify less: Spotify gives a development app a small quota.
-    private static let libraryFile = URL.applicationSupportDirectory.appending(path: "spotify-library.json")
+    private let libraryFile: URL
 
     /// Reloads the library and the Spotify home: always when the user asks
     /// (`force`), else at most every six hours.
@@ -122,56 +132,88 @@ final class SpotifyCatalog {
         _ = await (library, home)
     }
 
-    /// The library comes from the link when there is one: it has no small quota. The
-    /// Web API adds what only it has, such as podcasts and recently played, when it can.
+    /// Loads the music, the podcasts and recently played each on its own, so one
+    /// that fails leaves the others; a part that fails keeps what it had. Each part
+    /// that loads is saved.
     private func loadLibrary(force: Bool) async {
-        guard isSignedIn || isLinked, force || Date.now.timeIntervalSince(libraryAsked) > 6 * 60 * 60 else {
-            await loadMissingPodcasts()
+        guard isSignedIn || isLinked else { return }
+        guard force || Date.now.timeIntervalSince(libraryAsked) > 6 * 60 * 60 else {
+            await loadMissing()
             return
         }
-        let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
-        var loaded = library
-        var failure: Error?
+        // The link needs the Sonos; Home loads again once it is found.
+        var linkHousehold: Household?
         if isLinked {
-            // The link needs the Sonos; Home loads again once it is found.
-            guard let household = await household() else { return }
-            do {
-                (loaded.playlists, loaded.likedSongs, loaded.albums) = try await sonosService.library(household: household)
-            } catch {
-                failure = error
-            }
+            guard let found = await household() else { return }
+            linkHousehold = found
         }
-        if isSignedIn {
-            do {
-                if isLinked {
-                    // Spotify's quota is small: ask the Web API only what the link lacks.
-                    (loaded.shows, loaded.recentlyPlayed, loaded.jumpBackIn) =
-                        try await webAPI.extras(known: loaded.playlists + loaded.albums)
-                    podcastsMessage = nil
-                } else {
-                    loaded = try await webAPI.library()
-                }
-            } catch {
-                // Without the link the Web API is the only source; with it, the rest still stands.
-                if !isLinked || HTTP.isCancellation(error) { failure = failure ?? error }
-                else {
-                    log.error("web library: \(String(describing: error))")
-                    podcastsMessage = error.localizedDescription
-                }
+        async let podcasts: Void = loadPodcasts()
+        await loadMusic(household: linkHousehold)
+        // After the music: the playlists and albums it holds need no lookup.
+        await loadRecentlyPlayed()
+        await podcasts
+    }
+
+    /// The playlists, Liked Songs and albums: from the link when there is one, as it
+    /// has no small quota, else from the Web API.
+    private func loadMusic(household: Household?) async {
+        do {
+            if let household {
+                (library.playlists, library.likedSongs, library.albums) = try await sonosService.library(household: household)
+            } else {
+                (library.playlists, library.likedSongs, library.albums) = try await webAPI.music()
             }
-        }
-        if let failure {
+            libraryAsked = .now
+            save(library)
+            log.info("library: \(self.library.playlists.count) playlists, \(self.library.likedSongs.count) liked, \(self.library.albums.count) albums")
+            errorMessage = nil
+        } catch {
             // A load the view cancelled, such as when Home restarts its task once the
             // Sonos is found, doesn't count: the next one must still go out.
-            if !HTTP.isCancellation(failure) { libraryAsked = .now }
-            report(failure)
-            return
+            if !HTTP.isCancellation(error) { libraryAsked = .now }
+            report(error)
         }
-        library = loaded
-        libraryAsked = .now
-        Self.save(library)
-        log.info("library: \(loaded.playlists.count) playlists, \(loaded.likedSongs.count) liked, \(loaded.albums.count) albums, \(loaded.shows.count) podcasts")
-        errorMessage = nil
+    }
+
+    /// The podcasts the user follows, which only the Web API has. When they don't
+    /// load, `podcastsProblem` says why.
+    private func loadPodcasts() async {
+        guard isSignedIn else { return }
+        do {
+            library.shows = try await webAPI.podcasts()
+            podcastsLoaded = true
+            podcastsProblem = nil
+            save(library)
+            log.info("podcasts: loaded \(self.library.shows.count)")
+        } catch {
+            if HTTP.isCancellation(error) { return }
+            if let pause = error as? SpotifyWebAPI.Pause {
+                log.info("podcasts: not loaded, Spotify paused until \(pause.until.formatted(date: .omitted, time: .standard))")
+            } else {
+                log.error("podcasts: \(String(describing: error))")
+            }
+            podcastsProblem = PodcastsProblem(error)
+        }
+    }
+
+    /// What played recently, and the playlists and albums it came from, for Home.
+    private func loadRecentlyPlayed() async {
+        guard isSignedIn else { return }
+        do {
+            (library.recentlyPlayed, library.jumpBackIn) =
+                try await webAPI.recentlyPlayed(known: library.playlists + library.albums)
+            recentlyPlayedLoaded = true
+            save(library)
+        } catch {
+            if !HTTP.isCancellation(error) { log.error("recently played: \(String(describing: error))") }
+        }
+    }
+
+    /// The stored library may lack the podcasts or recently played because Spotify
+    /// refused them: ask again. During a pause nothing goes out.
+    private func loadMissing() async {
+        if library.shows.isEmpty, !podcastsLoaded { await loadPodcasts() }
+        if library.recentlyPlayed.isEmpty, !recentlyPlayedLoaded { await loadRecentlyPlayed() }
     }
 
     private func loadHome() async {
@@ -296,25 +338,7 @@ final class SpotifyCatalog {
         }
     }
 
-    /// The stored library may lack the podcasts because Spotify refused them: ask
-    /// again once a pause is over, else say why they are missing.
-    private func loadMissingPodcasts() async {
-        guard isSignedIn, isLinked, library.shows.isEmpty else { return }
-        if let refusal = webAPI.refusal {
-            podcastsMessage = refusal
-            return
-        }
-        do {
-            (library.shows, library.recentlyPlayed, library.jumpBackIn) =
-                try await webAPI.extras(known: library.playlists + library.albums)
-            podcastsMessage = nil
-            Self.save(library)
-        } catch {
-            if !HTTP.isCancellation(error) { podcastsMessage = error.localizedDescription }
-        }
-    }
-
-    private static func savedLibrary() -> (SpotifyWebAPI.Library, Date)? {
+    private func savedLibrary() -> (SpotifyWebAPI.Library, Date)? {
         guard let data = try? Data(contentsOf: libraryFile),
               let library = try? JSONDecoder().decode(SpotifyWebAPI.Library.self, from: data),
               let saved = try? libraryFile.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
@@ -322,14 +346,40 @@ final class SpotifyCatalog {
         return (library, saved)
     }
 
-    private static func save(_ library: SpotifyWebAPI.Library) {
+    private func save(_ library: SpotifyWebAPI.Library) {
         try? FileManager.default.createDirectory(at: libraryFile.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? JSONEncoder().encode(library).write(to: libraryFile, options: .atomic)
     }
 
     private func report(_ error: Error) {
         guard !HTTP.isCancellation(error) else { return }
-        Logger(subsystem: "com.example.sonifine", category: "Spotify").error("\(String(describing: error))")
+        log.error("\(String(describing: error))")
         errorMessage = error.localizedDescription
+    }
+}
+
+/// Why the podcasts didn't load. The message comes at display time, so a pause
+/// counts down and goes away when it is over.
+enum PodcastsProblem: Equatable {
+    case paused(SpotifyWebAPI.Pause)
+    /// Spotify refused with 403, as it does for a sign-in without `user-library-read`.
+    case signInAgain
+    case failed(String)
+
+    init(_ error: Error) {
+        switch error {
+        case let pause as SpotifyWebAPI.Pause: self = .paused(pause)
+        case is SpotifyWebAPI.MissingPermission: self = .signInAgain
+        default: self = .failed(error.localizedDescription)
+        }
+    }
+
+    /// What the user reads at `now`; nil once a pause is over.
+    func message(at now: Date) -> String? {
+        switch self {
+        case .paused(let pause): pause.message(at: now)
+        case .signInAgain: "Sign in to Spotify again to see your podcasts."
+        case .failed(let message): message
+        }
     }
 }

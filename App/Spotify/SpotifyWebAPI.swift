@@ -18,7 +18,28 @@ final class SpotifyWebAPI {
     private static let refreshTokenKey = "spotifyRefreshToken"
 
     /// Thrown when the sign-in lacks the permission for a request, such as liking a song.
-    struct MissingPermission: Error {}
+    struct MissingPermission: LocalizedError {
+        var errorDescription: String? { "Spotify doesn't allow this with your sign-in. Sign in to Spotify again." }
+    }
+
+    /// Thrown while Spotify asked the app to wait: nothing goes out until `until`.
+    struct Pause: LocalizedError, Equatable {
+        let until: Date
+        /// Whether Spotify refused for the developer quota rather than a short rate limit.
+        let isOverQuota: Bool
+
+        /// What the user reads at `now`, with the time left; nil once the pause is over.
+        func message(at now: Date) -> String? {
+            guard now < until else { return nil }
+            let minutes = (until.timeIntervalSince(now) / 60).rounded(.up)
+            let left = Duration.seconds(minutes * 60).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+            return isOverQuota
+                ? "Spotify's quota for this app is used up. Sonifine tries again in \(left)."
+                : "Spotify asks Sonifine to slow down. It tries again in \(left)."
+        }
+
+        var errorDescription: String? { message(at: .now) ?? "Spotify asked Sonifine to slow down." }
+    }
 
     private let transport: HTTPTransport
     private let secrets: SecretStore
@@ -29,11 +50,12 @@ final class SpotifyWebAPI {
     /// The refresh in progress. Requests that need a token meanwhile wait for it.
     private var refresh: Task<String, Error>?
 
-    /// After a 429 ("too many requests") the app sends nothing until then: a minute
-    /// at first, twice as long each time Spotify refuses again, up to half an hour.
     private let log = Logger(subsystem: "com.example.sonifine", category: "Spotify")
+    /// After a 429 ("too many requests") the app sends nothing until then: as long as
+    /// Spotify's `Retry-After` says, else a minute at first and twice as long each
+    /// time Spotify refuses again, up to half an hour.
     private var pausedUntil = Date.distantPast
-    private var pause: TimeInterval = 60
+    private var nextPause: TimeInterval = 60
     /// Whether the last refusal was the developer quota rather than a short rate limit.
     private var isOverQuota = false
 
@@ -53,9 +75,9 @@ final class SpotifyWebAPI {
         }
     }
 
-    /// The reason Spotify refuses requests now, if it does; nil when the app may ask.
-    var refusal: String? {
-        Date.now < pausedUntil ? Self.slowDown(until: pausedUntil, quota: isOverQuota).message : nil
+    /// The pause Spotify asked for, while it lasts; nil when the app may ask.
+    var pause: Pause? {
+        Date.now < pausedUntil ? Pause(until: pausedUntil, isOverQuota: isOverQuota) : nil
     }
 
     var isSignedIn: Bool { secrets.read(Self.refreshTokenKey) != nil }
@@ -118,7 +140,8 @@ final class SpotifyWebAPI {
             .map { URLQueryItem(name: $0.key, value: $0.value) }
         request.httpBody = Data((form.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B").utf8)
 
-        let (data, status) = try await transport(request)
+        let reply = try await transport(request)
+        let (data, status) = (reply.data, reply.status)
         if parameters["grant_type"] == "refresh_token", status == 400 || status == 401 {
             // Revoked or expired: only a new sign-in helps.
             signOut()
@@ -151,36 +174,31 @@ final class SpotifyWebAPI {
         var jumpBackIn: [SpotifyItem] = []
     }
 
-    func library() async throws -> Library {
+    /// The playlists, Liked Songs and saved albums, for when there is no Sonos link.
+    func music() async throws -> (playlists: [SpotifyItem], likedSongs: [SpotifyItem], albums: [SpotifyItem]) {
         async let playlistPage: Page<Playlist> = get("/me/playlists?limit=50")
         async let liked = likedSongs()
         async let albumPage: Page<SavedAlbum> = get("/me/albums?limit=50")
-        async let recentPage: Page<PlayHistory> = get("/me/player/recently-played?limit=50")
-        async let savedShows: [SavedShow?] = all("/me/shows?limit=50")
-
-        var library = Library()
-        library.playlists = try await playlistPage.items.compactMap { $0?.item }
-        library.likedSongs = try await liked
-        library.albums = try await albumPage.items.compactMap { $0?.album.item }
-        // The library loads without its podcasts when Spotify refuses them.
-        library.shows = ((try? await savedShows) ?? []).compactMap { $0?.show.item }
-        let history = try await recentPage.items.compactMap { $0 }
-        var seen = Set<SpotifyURI>()
-        library.recentlyPlayed = history.compactMap(\.track.item).filter { seen.insert($0.uri).inserted }
-        library.jumpBackIn = await contexts(of: history, known: library.playlists + library.albums)
-        return library
+        return (try await playlistPage.items.compactMap { $0?.item },
+                try await liked,
+                try await albumPage.items.compactMap { $0?.album.item })
     }
 
-    /// Only what the Sonos link doesn't give: the podcasts and what played recently.
-    /// `known` are the playlists and albums the link already loaded.
-    func extras(known: [SpotifyItem]) async throws -> (shows: [SpotifyItem], recentlyPlayed: [SpotifyItem], jumpBackIn: [SpotifyItem]) {
-        async let savedShows: [SavedShow?] = all("/me/shows?limit=50")
-        async let recentPage: Page<PlayHistory> = get("/me/player/recently-played?limit=50")
-        let shows = try await savedShows.compactMap { $0?.show.item }
-        let history = try await recentPage.items.compactMap { $0 }
+    /// The podcasts the user follows, most recently followed first. The link has none.
+    func podcasts() async throws -> [SpotifyItem] {
+        let saved: [SavedShow?] = try await all("/me/shows?limit=50")
+        return saved.compactMap { $0?.show.item }
+    }
+
+    /// The songs played recently, newest first and each once, and the playlists and
+    /// albums they were played from. `known` are the playlists and albums already
+    /// loaded, which need no request.
+    func recentlyPlayed(known: [SpotifyItem]) async throws -> (songs: [SpotifyItem], contexts: [SpotifyItem]) {
+        let page: Page<PlayHistory> = try await get("/me/player/recently-played?limit=50")
+        let history = page.items.compactMap { $0 }
         var seen = Set<SpotifyURI>()
-        let recent = history.compactMap(\.track.item).filter { seen.insert($0.uri).inserted }
-        return (shows, recent, await contexts(of: history, known: known))
+        let songs = history.compactMap(\.track.item).filter { seen.insert($0.uri).inserted }
+        return (songs, await contexts(of: history, known: known))
     }
 
     /// Every liked song, newest first.
@@ -315,39 +333,37 @@ final class SpotifyWebAPI {
 
     private func send(_ method: String, _ path: String) async throws -> Data {
         // Every request during a pause would make Spotify's limit last longer.
-        guard Date.now >= pausedUntil else { throw Self.slowDown(until: pausedUntil, quota: isOverQuota) }
+        if let pause { throw pause }
         var request = URLRequest(url: URL(string: "https://api.spotify.com/v1" + path)!)
         request.httpMethod = method
         request.setValue("Bearer \(try await validAccessToken())", forHTTPHeaderField: "Authorization")
-        let (data, status) = try await transport(request)
+        let reply = try await transport(request)
+        let (data, status) = (reply.data, reply.status)
         if !(200..<300).contains(status) {
             log.error("\(method) \(path.prefix(60)): \(status) \(String(decoding: data.prefix(200), as: UTF8.self))")
         }
         if status == 429 {
             // QUOTA_EXCEEDED is the budget of the developer account, which lasts much longer
-            // than a short rate limit; Spotify doesn't say how long, so wait an hour.
+            // than a short rate limit. Without a Retry-After (seconds), wait an hour for it.
             let quota = String(decoding: data, as: UTF8.self).contains("QUOTA_EXCEEDED")
-            pausedUntil = Date.now.addingTimeInterval(quota ? 60 * 60 : pause)
-            pause = min(pause * 2, 30 * 60)
+            let retryAfter = reply.header("Retry-After")
+                .flatMap { TimeInterval($0.trimmingCharacters(in: .whitespaces)) }
+                .flatMap { $0 > 0 ? $0 : nil }
+            pausedUntil = Date.now.addingTimeInterval(retryAfter ?? (quota ? 60 * 60 : nextPause))
+            nextPause = min(nextPause * 2, 30 * 60)
             isOverQuota = quota
             defaults?.set(pausedUntil, forKey: "spotifyPausedUntil")
             defaults?.set(quota, forKey: "spotifyOverQuota")
-            throw Self.slowDown(until: pausedUntil, quota: quota)
+            log.error("paused until \(self.pausedUntil.formatted(date: .omitted, time: .standard))\(retryAfter == nil ? "" : " (Retry-After)")")
+            throw Pause(until: pausedUntil, isOverQuota: quota)
         }
-        pause = 60
+        nextPause = 60
         if status == 403 { throw MissingPermission() }
         guard (200..<300).contains(status) else {
             let message = (try? JSONDecoder().decode(APIError.self, from: data))?.error.message
             throw AppError("Spotify: \(message ?? "request failed (\(status))")")
         }
         return data
-    }
-
-    private static func slowDown(until date: Date, quota: Bool) -> AppError {
-        let minutes = max(1, Int((date.timeIntervalSinceNow / 60).rounded(.up)))
-        return AppError(quota
-            ? "Spotify's quota for this app is used up. Sonifine tries again in \(minutes) min."
-            : "Spotify asks Sonifine to slow down. It tries again in \(minutes) min.")
     }
 
     private static func encode(_ query: String) -> String {

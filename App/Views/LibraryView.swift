@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 /// A page of the library. Every screen opens through a value, so one navigation
@@ -17,8 +18,11 @@ struct LibraryView: View {
                     link("Playlists", systemImage: "music.note.list", count: catalog.library.playlists.count, page: .playlists)
                     link("Liked Songs", systemImage: "heart.fill", count: catalog.library.likedSongs.count, page: .likedSongs)
                     link("Albums", systemImage: "square.stack.fill", count: catalog.library.albums.count, page: .albums)
-                    link("Podcasts", systemImage: "mic.fill", count: catalog.library.shows.count, page: .podcasts,
-                         note: catalog.library.shows.isEmpty ? catalog.podcastsMessage : nil)
+                    // The note counts down a pause, and goes when it is over.
+                    TimelineView(.periodic(from: .now, by: 10)) { context in
+                        link("Podcasts", systemImage: "mic.fill", count: catalog.library.shows.count, page: .podcasts,
+                             note: catalog.library.shows.isEmpty ? catalog.podcastsProblem?.message(at: context.date) : nil)
+                    }
                 }
                 .refreshable { await catalog.reload() }
             } else {
@@ -53,6 +57,7 @@ struct LibraryPageView: View {
     let page: LibraryPage
     @Environment(SpotifyCatalog.self) private var catalog
     @Environment(\.play) private var play
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
     var body: some View {
         let library = catalog.library
@@ -62,12 +67,35 @@ struct LibraryPageView: View {
         case .podcasts:
             list("Podcasts", library.shows, orderKey: "podcastsOrder", sortKeys: [.custom, .title, .added])
                 .overlay {
-                    if library.shows.isEmpty, let message = catalog.podcastsMessage {
-                        ContentUnavailableView("Podcasts didn't load", systemImage: "exclamationmark.triangle",
-                                               description: Text(message))
-                    }
+                    if library.shows.isEmpty, let problem = catalog.podcastsProblem { podcastsUnavailable(problem) }
                 }
         case .likedSongs: likedSongs(library.likedSongs)
+        }
+    }
+
+    /// Why the podcasts didn't load, counting down a pause; a sign-in that Spotify
+    /// refuses gets a button to sign in again.
+    private func podcastsUnavailable(_ problem: PodcastsProblem) -> some View {
+        TimelineView(.periodic(from: .now, by: 10)) { context in
+            if let message = problem.message(at: context.date) {
+                ContentUnavailableView {
+                    Label("Podcasts didn't load", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(message)
+                } actions: {
+                    if problem == .signInAgain {
+                        Button("Sign in with Spotify", action: signIn)
+                    }
+                }
+            }
+        }
+    }
+
+    private func signIn() {
+        Task {
+            await catalog.signIn { url in
+                try await webAuthenticationSession.authenticate(using: url, callbackURLScheme: SpotifyWebAPI.callbackScheme)
+            }
         }
     }
 

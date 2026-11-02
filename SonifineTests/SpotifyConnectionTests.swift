@@ -23,6 +23,12 @@ private let twoSongs = """
 </ns2:getMetadataResult></ns2:getMetadataResponse></s:Body></s:Envelope>
 """
 
+/// One followed podcast, as `/me/shows` answers.
+private let followedTalkRL = """
+    {"items":[{"added_at":"2026-10-01T08:00:00Z","show":{"uri":"spotify:show:S","name":"TalkRL",\
+    "images":[{"url":"https://i.scdn.co/image/s"}],"total_episodes":12}}],"next":null}
+    """
+
 /// The link to Sonos's Spotify service keeps working when its key expires.
 @MainActor
 struct SonosSpotifyServiceTests {
@@ -152,13 +158,25 @@ struct SpotifyWebAPITests {
         recorded.answer((200, token), when: isTokenRequest)
         recorded.answer((429, "")) { $0.url?.path() == "/v1/search" }
 
-        await #expect(throws: AppError.self) { try await api.search("Coldplay") }
+        await #expect(throws: SpotifyWebAPI.Pause.self) { try await api.search("Coldplay") }
         let sent = recorded.requests.count
-        await #expect(throws: AppError("Spotify asks Sonifine to slow down. It tries again in 1 min.")) {
-            try await api.search("Coldplay")
-        }
+        let pause = await #expect(throws: SpotifyWebAPI.Pause.self) { try await api.search("Coldplay") }
 
+        #expect(pause?.localizedDescription == "Spotify asks Sonifine to slow down. It tries again in 1 min.")
         #expect(recorded.requests.count == sent, "the pause keeps Spotify's limit from growing")
+    }
+
+    @Test func aRetryAfterSetsHowLongThePauseLasts() async {
+        let api = api()
+        recorded.answer((200, token), when: isTokenRequest)
+        recorded.answer((429, #"{"error":{"status":429,"message":"Too many requests","reason":"QUOTA_EXCEEDED"}}"#),
+                        headers: ["retry-after": "7200"]) { $0.url?.path() == "/v1/search" }
+
+        await #expect(throws: SpotifyWebAPI.Pause.self) { try await api.search("Coldplay") }
+
+        let left = (api.pause?.until.timeIntervalSinceNow ?? 0) / 60
+        #expect((119...120).contains(left), "two hours as Spotify said, not the hour the app waits without it")
+        #expect(api.pause?.message(at: .now) == "Spotify's quota for this app is used up. Sonifine tries again in 2 hr.")
     }
 
     @Test func aUsedUpQuotaStillHoldsAfterARestart() async {
@@ -169,13 +187,13 @@ struct SpotifyWebAPITests {
         recorded.answer((429, #"{"error":{"status":429,"message":"Too many requests","reason":"QUOTA_EXCEEDED"}}"#)) {
             $0.url?.path() == "/v1/me/shows"
         }
-        _ = try? await before.extras(known: [])
+        _ = try? await before.podcasts()
         let sent = recorded.requests.count
 
         let after = SpotifyWebAPI(transport: recorded.transport, secrets: secrets, defaults: defaults)
 
-        #expect(after.refusal?.contains("quota for this app is used up") == true)
-        await #expect(throws: AppError.self) { try await after.extras(known: []) }
+        #expect(after.pause?.isOverQuota == true)
+        await #expect(throws: SpotifyWebAPI.Pause.self) { try await after.podcasts() }
         #expect(recorded.requests.count == sent, "nothing goes out during the pause")
     }
 
@@ -263,24 +281,15 @@ struct SpotifyWebAPITests {
         #expect(!api.canReadPlaybackPosition)
     }
 
-    @Test func theLibraryHasTheFollowedPodcastsAndLoadsWithoutThem() async throws {
+    @Test func theFollowedPodcastsOpen() async throws {
         let api = api()
         recorded.answer((200, token), when: isTokenRequest)
-        for path in ["/v1/me/playlists", "/v1/me/tracks", "/v1/me/albums", "/v1/me/player/recently-played"] {
-            recorded.answer((200, #"{"items":[]}"#)) { $0.url?.path() == path }
-            recorded.answer((200, #"{"items":[]}"#)) { $0.url?.path() == path }
-        }
-        recorded.answer((200, """
-            {"items":[{"added_at":"2026-10-01T08:00:00Z","show":{"uri":"spotify:show:S","name":"TalkRL",            "images":[{"url":"https://i.scdn.co/image/s"}],"total_episodes":12}}],"next":null}
-            """)) { $0.url?.path() == "/v1/me/shows" }
-        recorded.answer((403, #"{"error":{"message":"Forbidden"}}"#)) { $0.url?.path() == "/v1/me/shows" }
+        recorded.answer((200, followedTalkRL)) { $0.url?.path() == "/v1/me/shows" }
 
-        let library = try await api.library()
-        let withoutPodcasts = try await api.library()
+        let shows = try await api.podcasts()
 
-        #expect(library.shows.map(\.name) == ["TalkRL"])
-        #expect(library.shows.first?.opens == true)
-        #expect(withoutPodcasts.shows.isEmpty)
+        #expect(shows.map(\.name) == ["TalkRL"])
+        #expect(shows.first?.opens == true)
     }
 
     @Test func searchFindsPodcastsAndEpisodesApartFromSongs() async throws {
@@ -295,5 +304,82 @@ struct SpotifyWebAPITests {
         #expect(results.tracks.map(\.name) == ["Yellow"])
         #expect(results.shows.map(\.subtitle) == ["Podcast · Robin"])
         #expect(results.episodes.map(\.uri.kind) == [.episode])
+    }
+}
+
+/// The catalog loads the podcasts apart from the rest of the library, and says why they are missing.
+@MainActor
+struct SpotifyCatalogPodcastTests {
+    private let recorded = RecordedTransport()
+    private let secrets = MemorySecrets()
+    private let libraryFile = URL.temporaryDirectory.appending(path: "library-\(UUID()).json")
+
+    /// A catalog signed in to the Web API, without the Sonos link.
+    private func signedInCatalog() -> SpotifyCatalog {
+        secrets.values["spotifyRefreshToken"] = "R1"
+        recorded.answer((200, #"{"access_token":"A","expires_in":3600,"refresh_token":"R2"}"#)) {
+            $0.url?.path() == "/api/token"
+        }
+        return SpotifyCatalog(webAPI: SpotifyWebAPI(transport: recorded.transport, secrets: secrets),
+                              sonosService: SonosSpotifyService(transport: recorded.transport, secrets: secrets),
+                              libraryFile: libraryFile, household: { nil })
+    }
+
+    private func answerMusic() {
+        for path in ["/v1/me/playlists", "/v1/me/tracks", "/v1/me/albums"] {
+            recorded.answer((200, #"{"items":[]}"#)) { $0.url?.path() == path }
+        }
+    }
+
+    private func path(_ path: String) -> (URLRequest) -> Bool { { $0.url?.path() == path } }
+
+    @Test func podcastsLoadWhenRecentlyPlayedFails() async {
+        let catalog = signedInCatalog()
+        answerMusic()
+        recorded.answer((500, #"{"error":{"message":"Server error"}}"#), when: path("/v1/me/player/recently-played"))
+        recorded.answer((200, followedTalkRL), when: path("/v1/me/shows"))
+
+        await catalog.reload()
+
+        #expect(catalog.library.shows.map(\.name) == ["TalkRL"])
+        #expect(catalog.podcastsProblem == nil)
+        #expect(catalog.errorMessage == nil, "the library itself loaded")
+    }
+
+    @Test func aRefusedSignInAsksToSignInAgainForPodcasts() async {
+        let catalog = signedInCatalog()
+        answerMusic()
+        recorded.answer((200, #"{"items":[]}"#), when: path("/v1/me/player/recently-played"))
+        recorded.answer((403, #"{"error":{"status":403,"message":"Insufficient client scope"}}"#), when: path("/v1/me/shows"))
+
+        await catalog.reload()
+
+        #expect(catalog.podcastsProblem == .signInAgain)
+        #expect(catalog.podcastsProblem?.message(at: .now) == "Sign in to Spotify again to see your podcasts.")
+    }
+
+    @Test func podcastsThatFailedAreAskedAgainWithoutTheLink() async {
+        let catalog = signedInCatalog()
+        answerMusic()
+        recorded.answer((200, #"{"items":[]}"#), when: path("/v1/me/player/recently-played"))
+        recorded.answer((500, #"{"error":{"message":"Server error"}}"#), when: path("/v1/me/shows"))
+        await catalog.reload()
+        #expect(catalog.podcastsProblem == .failed("Spotify: Server error"))
+
+        recorded.answer((200, followedTalkRL), when: path("/v1/me/shows"))
+        await catalog.reload(force: false)
+
+        #expect(catalog.library.shows.map(\.name) == ["TalkRL"])
+        #expect(catalog.podcastsProblem == nil)
+        #expect(recorded.requests.filter(path("/v1/me/playlists")).count == 1, "the rest of the library is still fresh")
+    }
+
+    @Test func aPauseCountsDownAndIsGoneWhenOver() {
+        let end = Date.now.addingTimeInterval(3600)
+        let problem = PodcastsProblem.paused(SpotifyWebAPI.Pause(until: end, isOverQuota: false))
+
+        #expect(problem.message(at: end.addingTimeInterval(-90)) == "Spotify asks Sonifine to slow down. It tries again in 2 min.")
+        #expect(problem.message(at: end.addingTimeInterval(-30)) == "Spotify asks Sonifine to slow down. It tries again in 1 min.")
+        #expect(problem.message(at: end) == nil)
     }
 }

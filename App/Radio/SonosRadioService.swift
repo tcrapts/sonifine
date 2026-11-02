@@ -19,9 +19,9 @@ final class SonosRadioService {
     func home() async throws -> [RadioShelf] {
         var request = URLRequest(url: Self.browse, timeoutInterval: 10)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, status) = try await transport(request)
-        guard status == 200 else { throw AppError("Sonos Radio didn't load (\(status)).") }
-        let page = try JSONDecoder().decode(SMAPIBrowsePage.self, from: data)
+        let reply = try await transport(request)
+        guard reply.status == 200 else { throw AppError("Sonos Radio didn't load (\(reply.status)).") }
+        let page = try JSONDecoder().decode(SMAPIBrowsePage.self, from: reply.data)
         return page.views.compactMap { view in
             let items = view.items?.compactMap(\.radioItem) ?? []
             guard !items.isEmpty else { return nil }
@@ -64,9 +64,9 @@ final class SonosRadioService {
     }
 
     private func call(_ action: String, _ body: String) async throws -> XMLNode {
-        let (data, status) = try await transport(SMAPI.request(Self.service, action: action, body: body))
-        guard status == 200, let response = XMLNode.parse(data) else {
-            throw AppError("Sonos Radio: \(action) failed (\(status)).")
+        let reply = try await transport(SMAPI.request(Self.service, action: action, body: body))
+        guard reply.status == 200, let response = XMLNode.parse(reply.data) else {
+            throw AppError("Sonos Radio: \(action) failed (\(reply.status)).")
         }
         return response
     }

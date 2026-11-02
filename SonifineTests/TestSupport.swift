@@ -6,11 +6,12 @@ import Foundation
 final class RecordedTransport {
     typealias Answer = (status: Int, body: String)
     private(set) var requests: [URLRequest] = []
-    private var answers: [(matches: (URLRequest) -> Bool, answer: Answer)] = []
+    private var answers: [(matches: (URLRequest) -> Bool, response: HTTPResponse)] = []
 
-    /// Answers the next request that `matches` (once per call of `answer`).
-    func answer(_ answer: Answer, when matches: @escaping (URLRequest) -> Bool) {
-        answers.append((matches, answer))
+    /// Answers the next request that `matches` (once per call of `answer`), with
+    /// `headers` such as `Retry-After`.
+    func answer(_ answer: Answer, headers: [String: String] = [:], when matches: @escaping (URLRequest) -> Bool) {
+        answers.append((matches, HTTPResponse(status: answer.status, headers: headers, data: Data(answer.body.utf8))))
     }
 
     func answer(soapAction action: String, _ answer: Answer) {
@@ -21,10 +22,9 @@ final class RecordedTransport {
         { [self] request in
             requests.append(request)
             guard let index = answers.firstIndex(where: { $0.matches(request) }) else {
-                return (Data("no recorded answer".utf8), 599)
+                return HTTPResponse(status: 599, data: Data("no recorded answer".utf8))
             }
-            let answer = answers.remove(at: index).answer
-            return (Data(answer.body.utf8), answer.status)
+            return answers.remove(at: index).response
         }
     }
 

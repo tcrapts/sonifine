@@ -139,6 +139,17 @@ covers ahead and beside come from no queue.
 
 Both keep their keys in the Keychain.
 
+`SpotifyCatalog` loads the library in three parts, each on its own: the music
+(from the link when there is one, else the Web API), the podcasts and recently
+played. A part that fails keeps what it had, and the podcasts and recently played
+load again on the next visit to Home until they succeed. `podcastsProblem` says
+why the podcasts are missing; the Library shows it, counting down a pause. After a
+429 the Web API sends nothing for as long as Spotify's `Retry-After` header says,
+and keeps that pause across launches. Without the header it waits an hour for
+`QUOTA_EXCEEDED`, else a minute that doubles with each refusal, up to half an hour.
+The `[Spotify]` log names each outcome: the music and podcasts loaded with their
+counts, the pause, or the error.
+
 ## Volume buttons
 
 See [ADR 0003](adr/0003-volume-buttons-through-the-system-volume.md). iOS has no
