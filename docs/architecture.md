@@ -131,7 +131,7 @@ covers ahead and beside come from no queue.
   An expired key comes back renewed in a `Client.TokenRefreshRequired` fault.
 - **Library sign-in** (`SpotifyWebAPI`). Authorization code with PKCE for
   the client ID of the owner's app on developer.spotify.com
-  (`SPOTIFY_CLIENT_ID` in `local.mk`, read from Info.plist), redirect URI
+  (`SPOTIFY_CLIENT_ID` in `.env`, read from Info.plist), redirect URI
   `finevolume://spotify-callback`. It reads playlists, Liked Songs, saved albums,
   followed podcasts (`/me/shows`) and their episodes (`/shows/{id}/episodes`,
   with `resume_point` under scope `user-read-playback-position`), recently

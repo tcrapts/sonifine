@@ -24,8 +24,8 @@ vocabulary before exploring the code.
 - The speakers are in the owner's home. Tests that play music or change the
   volume are audible there: keep the volume as the owner left it and say what
   you played.
-- The owner's values live in `local.mk` (git-ignored, see `local.example.mk`).
-  The bundle ID in `local.mk` and the URL scheme `finevolume` stay as they are:
+- The owner's values live in `.env` (git-ignored, see `.env.example`).
+  The bundle ID in `.env` and the URL scheme `finevolume` stay as they are:
   they keep the owner's sign-ins on the installed app and match the redirect URI
   in the Spotify dashboard.
 - The owner tests on the iPhone. After a change they can see, install it with

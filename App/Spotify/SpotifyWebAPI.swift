@@ -11,14 +11,14 @@ final class SpotifyWebAPI {
     static let callbackScheme = "finevolume"
     static let redirectURI = "finevolume://spotify-callback"
     /// The client ID of the owner's app on developer.spotify.com: `SPOTIFY_CLIENT_ID`
-    /// in `local.mk`, which the build writes into Info.plist. Nil when the build has none.
+    /// in `.env`, which the build writes into Info.plist. Nil when the build has none.
     static let clientID: String? = {
         let id = Bundle.main.object(forInfoDictionaryKey: "SpotifyClientID") as? String
         return id?.isEmpty == false ? id : nil
     }()
     /// What the sign-in shows when the build has no client ID.
     static let missingClientIDMessage =
-        "This build has no Spotify client ID. Set SPOTIFY_CLIENT_ID in local.mk and build again; the README explains how."
+        "This build has no Spotify client ID. Set SPOTIFY_CLIENT_ID in .env and build again; the README explains how."
     private static let scopes = [
         "playlist-read-private", "playlist-read-collaborative", "user-library-read",
         "user-read-recently-played", "user-library-modify", "user-read-playback-position",
